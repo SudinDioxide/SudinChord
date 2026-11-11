@@ -2,50 +2,121 @@
 
 A modern, high-fidelity desktop music player for Windows built with React, TypeScript, and Electron.
 
-## ✨ Features
+---
 
-- **Lossless Audio Streaming Addons:** Connect custom lossless streaming extensions and endpoints to enjoy studio-grade lossless audio.
-- **Local Lossless Library:** Smooth playback with full HTTP 206 byte-range seeking support for FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3.
-- **Instant Folder Resuming & Artwork Caching:** Seamless folder restoration on app startup with in-memory LRU artwork caching and disk metadata caching.
-- **Synchronized Lyrics:** Multi-provider lyrics integration featuring real-time word-by-word synchronization, romanization, and translation.
-- **AutoMix & DJ Decks:** Dual-deck playback, intelligent track transitions, tempo alignment, and parametric equalizer.
-- **Integrations:** Spotify playlist import and Discord Rich Presence listening status.
+## ✨ Highlights & Features
 
-## 🚀 Getting Started
+- **Lossless Audio Streaming Addons:** Configure custom lossless audio streaming endpoints to stream FLAC / studio-grade audio seamlessly.
+- **Enhanced Local Music Library:** Plays FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 files with full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding.
+- **Automatic Library Resuming & Artwork Caching:** Automatically restores your last opened music folder upon app launch with in-memory LRU artwork caching and disk metadata caching.
+- **Synced Lyrics with Romanization & Translation:** Real-time word-by-word synchronized lyrics, with integrated support for fast romanization and translation (powered by Lyrica and dedicated APIs).
+- **AutoMix & DJ Deck Engine:** Dual-deck playback, automatic BPM/beat-grid matching, smooth track transitions, and parametric EQ.
+- **Integrations:** Spotify playlist import and Discord Rich Presence listening activity.
 
-### Prerequisites
+---
 
-- [Node.js](https://nodejs.org/) (>= 22.0.0)
-- [pnpm](https://pnpm.io/) (>= 9.0.0)
+## 🛠️ How to Setup & Run
 
-### Installation
+### Option 1: Run the Pre-built Desktop App (Recommended for Users)
 
+1. Navigate to `desktop/dist-electron/`.
+2. Choose one of the following:
+   - **Installer:** Run `SudinChord Setup 1.0.0.exe` to install SudinChord onto your Windows PC with desktop and Start Menu shortcuts.
+   - **Portable:** Open `desktop/dist-electron/win-unpacked/SudinChord.exe` directly without installation.
+
+---
+
+### Option 2: Setup & Build from Source (For Developers)
+
+#### Prerequisites
+- **[Node.js](https://nodejs.org/)** (v22.0.0 or higher)
+- **[pnpm](https://pnpm.io/)** (v9.0.0 or higher)
+- **[Git](https://git-scm.com/)**
+
+#### 1. Clone the Repository
+```bash
+git clone https://github.com/SudinDioxide/SudinChord.git
+cd SudinChord
+```
+
+#### 2. Install Dependencies
 ```bash
 pnpm install
 ```
 
-### Running in Development
-
-Run the desktop app:
-
+#### 3. Run in Development Mode
+To launch the desktop Electron app in development mode with hot-reloading:
 ```bash
 pnpm desktop
 ```
 
-Or run the web client:
-
+Or to run the web interface in your browser:
 ```bash
 pnpm dev
 ```
 
-### Building Windows Executable & Installer
-
-To compile the web assets and package the Windows executable:
-
+#### 4. Build Windows Executable & Installer
+To compile all production web assets and build the Windows package:
 ```bash
 pnpm desktop:build
 ```
 
-The packaged files will be located in `desktop/dist-electron/`:
-- `SudinChord Setup 1.0.0.exe` — Windows Installer
-- `win-unpacked/SudinChord.exe` — Standalone Executable
+The output files will be created in `desktop/dist-electron/`:
+- `SudinChord Setup 1.0.0.exe` (Windows NSIS Installer)
+- `win-unpacked/SudinChord.exe` (Portable Windows Application)
+
+---
+
+## ⚙️ Configuration & Features Guide
+
+### 1. Adding Lossless Streaming Addons
+SudinChord supports connecting custom lossless streaming endpoints:
+1. Open **Settings** from the sidebar.
+2. Select **Lossless Addons** (or navigate to `/settings/addons`).
+3. Click **Add Addon** and paste your extension streaming link.
+   - *Example:* `https://stream.pencarimovie.com/66ff097863dedb7ccd8401d5ffe616f3/music`
+4. You can add multiple addons; SudinChord automatically routes playback through the highest quality active provider.
+
+### 2. Playing Local Music
+1. Click **Local Files** in the sidebar.
+2. Click **Open Music Folder** and select your local music directory (e.g. `Music/Tamil`).
+3. **Supported Formats:**
+   - `.flac` (16-bit and 24-bit high-resolution FLAC)
+   - `.m4a` / `.alac` (Apple Lossless Audio Codec and AAC)
+   - `.wav`, `.mp3`, `.ogg`, `.opus`, `.webm`
+4. **Auto-Save:** SudinChord automatically remembers your last opened music folder and restores all tracks and album artwork whenever you reopen the app.
+
+### 3. Setting Up Lyrics (Romanization & Translation)
+1. Open **Settings** › **Lyrics**.
+2. **Lyric Providers:** Enable sources like Lyrica, LRCLIB, Kugou, Musixmatch, or YouTube Music.
+3. **Romanization & Translation:**
+   - Toggle **Romanize Lyrics** to view phonetic transcriptions for non-Latin scripts (Tamil, Japanese, Korean, Chinese, Hindi, etc.).
+   - Toggle **Translate Lyrics** to view English translations line-by-line.
+4. **Fast Lyrica Server (Optional Local Acceleration):**
+   - SudinChord automatically checks for a local [Lyrica](https://github.com/Wilooper/Lyrica) instance running on `http://127.0.0.1:9999/`.
+   - Running a local Lyrica server speeds up lyric fetching from ~15 seconds to under 30 milliseconds.
+
+---
+
+## 📁 Project Structure
+
+```
+SudinChord/
+├── app/                  # React + Vite frontend application
+│   ├── src/
+│   │   ├── playback/     # Audio engines, local playback, AutoMix, Addon resolver
+│   │   ├── lyrics/       # Synced lyrics providers (Lyrica, LRCLIB, Kugou)
+│   │   ├── pages/        # UI Views (Home, Local Files, Addons, Settings)
+│   │   └── shell/        # Player bar, fullscreen view, navigation sidebar
+├── desktop/              # Electron desktop backend
+│   ├── main.cjs          # Local HTTP streaming server with HTTP 206 Byte-Range & ALAC transcoding
+│   ├── localMetadata.cjs # Zero-dependency metadata & album artwork parser
+│   └── bin/              # Bundled static FFmpeg for lossless audio processing
+├── shared/               # Shared TypeScript types and protocols
+└── extension/            # Background extension bridge
+```
+
+---
+
+## 📄 License
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
