@@ -599,7 +599,7 @@ ipcMain.handle('bridge:call', async (_event, { method, params }) => {
       return await ytAuth.setConnected(params?.connected);
 
     case 'yt.signIn':
-      openLoginHelper();
+      ytAuth.openGoogleSignIn(mainWindow, broadcastAuthState);
       return {};
 
     case 'yt.importCookies':
@@ -773,10 +773,10 @@ function createWindow() {
     console.error('[Desktop] Failed to load URL:', err);
   });
 
-  // Catch Google / YouTube sign in links and open the native login helper modal
+  // Catch Google / YouTube sign in links and open the native login window
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.includes('accounts.google.com') || url.includes('music.youtube.com')) {
-      openLoginHelper();
+      ytAuth.openGoogleSignIn(mainWindow, broadcastAuthState);
       return { action: 'deny' };
     }
     if (url.includes('spotify.com')) {

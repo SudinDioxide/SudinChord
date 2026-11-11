@@ -1,4 +1,4 @@
-const { session, BrowserWindow } = require('electron');
+const { session, BrowserWindow, net } = require('electron');
 const crypto = require('node:crypto');
 
 const MUSIC_ORIGIN = 'https://music.youtube.com';
@@ -13,38 +13,23 @@ let selectedChannelId = null;
 let isConnected = true;
 let cachedAccounts = null;
 let cachedAccountsTime = 0;
+let cachedWebIndex = null;
 
 async function getCookies(targetUrl) {
   try {
     const map = new Map();
-    const ytCookies = await session.defaultSession.cookies.get({ domain: '.youtube.com' });
-    for (const c of ytCookies) {
+    const target = targetUrl || MUSIC_ORIGIN;
+
+    // Get cookies for music.youtube.com (includes host-only and secure cookies)
+    const mCookies = await session.defaultSession.cookies.get({ url: target });
+    for (const c of mCookies) {
       map.set(c.name, c.value);
     }
 
-    if (targetUrl) {
-      const urlCookies = await session.defaultSession.cookies.get({ url: targetUrl });
-      for (const c of urlCookies) {
-        map.set(c.name, c.value);
-      }
-    } else {
-      const mCookies = await session.defaultSession.cookies.get({ url: MUSIC_ORIGIN });
-      for (const c of mCookies) {
-        map.set(c.name, c.value);
-      }
-    }
-
-    // Include .google.com cookies if SAPISID is not found in YouTube cookies
-    let hasSigningSecret = false;
-    for (const name of SIGNING_COOKIES) {
-      if (map.has(name) && map.get(name)) {
-        hasSigningSecret = true;
-        break;
-      }
-    }
-    if (!hasSigningSecret) {
-      const gCookies = await session.defaultSession.cookies.get({ domain: '.google.com' });
-      for (const c of gCookies) {
+    // Also get cookies for .youtube.com domain
+    const ytCookies = await session.defaultSession.cookies.get({ domain: '.youtube.com' });
+    for (const c of ytCookies) {
+      if (!map.has(c.name)) {
         map.set(c.name, c.value);
       }
     }
@@ -56,7 +41,7 @@ async function getCookies(targetUrl) {
 }
 
 async function getSigningSecret() {
-  const map = await getCookies();
+  const map = await getCookies(MUSIC_ORIGIN);
   for (const name of SIGNING_COOKIES) {
     if (map.has(name) && map.get(name)) {
       return map.get(name);
@@ -123,6 +108,19 @@ async function signedFetch(url, init = {}, identity = { authUser: '0', pageId: n
     headers['X-Youtube-Client-Version'] = WEB_REMIX_VERSION;
   }
 
+  // Use net.fetch from Electron when available for native Chromium cookie/network handling
+  if (net && typeof net.fetch === 'function') {
+    try {
+      return await net.fetch(url, {
+        method: init.method || 'GET',
+        headers,
+        body: init.body,
+      });
+    } catch (err) {
+      console.warn('[Desktop] net.fetch fallback to global fetch:', err.message);
+    }
+  }
+
   return fetch(url, {
     method: init.method || 'GET',
     headers,
@@ -165,7 +163,7 @@ function text(node) {
 }
 
 function photo(item) {
-  const thumbnails = item?.accountPhoto?.thumbnails;
+  const thumbnails = item?.accountPhoto?.thumbnails || item?.thumbnails;
   return thumbnails?.at(-1)?.url || null;
 }
 
@@ -196,12 +194,15 @@ async function readLogin(authUser) {
   const identity = { authUser, pageId: null };
   try {
     const menu = await musicApi('account/account_menu', identity);
-    const header = renderers(menu, 'activeAccountHeaderRenderer')[0];
+    let header = renderers(menu, 'activeAccountHeaderRenderer')[0];
+    if (!header) {
+      header = renderers(menu, 'accountItem')[0] || renderers(menu, 'accountItemRenderer')[0];
+    }
     if (!header) return null;
 
-    const name = text(header.accountName) || 'YouTube Music';
+    const name = text(header.accountName) || text(header.title) || 'YouTube Music';
     const email = text(header.email) || null;
-    const handle = text(header.channelHandle) || null;
+    const handle = text(header.channelHandle) || text(header.accountByline) || null;
     const avatarUrl = photo(header);
 
     let channels = [];
@@ -241,6 +242,20 @@ async function readLogin(authUser) {
     }
 
     return { authUser, name, email, avatarUrl, channels };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function webSessionIndex() {
+  try {
+    const response = await signedFetch(
+      `${MUSIC_ORIGIN}/`,
+      { headers: { Accept: 'text/html' } },
+      { authUser: '0', pageId: null },
+    );
+    const html = await response.text();
+    return /"SESSION_INDEX":"?(\d+)/.exec(html)?.[1] ?? null;
   } catch {
     return null;
   }
@@ -251,10 +266,15 @@ async function readAccounts(force = false) {
     return cachedAccounts;
   }
 
-  const results = await Promise.all([readLogin('0'), readLogin('1'), readLogin('2')]);
+  const [results, webIndex] = await Promise.all([
+    Promise.all(Array.from({ length: 10 }, (_, i) => readLogin(String(i)))),
+    webSessionIndex(),
+  ]);
+
   const list = results.filter(Boolean);
   cachedAccounts = list;
   cachedAccountsTime = Date.now();
+  cachedWebIndex = webIndex;
   return list;
 }
 
@@ -265,9 +285,9 @@ function chooseChannel(accounts, selectedId) {
     const match = allChannels.find((c) => c.id === selectedId);
     if (match) return match;
   }
-  const primary = accounts[0];
-  const selected = primary.channels.find((c) => c.selectedOnWeb) || primary.channels[0];
-  return selected || null;
+  const preferred = accounts.find((a) => a.authUser === cachedWebIndex) || accounts[0];
+  const selected = preferred?.channels.find((c) => c.selectedOnWeb) || preferred?.channels[0];
+  return selected || allChannels[0] || null;
 }
 
 async function getAuthState(refresh = false) {
@@ -333,13 +353,13 @@ function openGoogleSignIn(parentWindow, onComplete) {
   }
 
   authWindow = new BrowserWindow({
-    width: 580,
-    height: 740,
+    width: 600,
+    height: 750,
     parent: parentWindow || undefined,
     modal: !!parentWindow,
     title: 'Sign in to YouTube Music - Google Accounts',
     autoHideMenuBar: true,
-    backgroundColor: '#121212',
+    backgroundColor: '#0d0f12',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -363,34 +383,42 @@ function openGoogleSignIn(parentWindow, onComplete) {
 
   authWindow.loadURL(
     'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F',
-    { userAgent: FIREFOX_UA }
+    { userAgent: FIREFOX_UA },
   );
 
+  let verified = false;
   const checkRedirect = async (url) => {
-    // If navigation landed on music.youtube.com or youtube.com (after accounts.google.com flow)
-    if (
-      url.includes('music.youtube.com') ||
-      (url.includes('youtube.com') && !url.includes('accounts.google.com'))
-    ) {
+    if (verified) return;
+    // Navigation must reach music.youtube.com (not intermediate accounts.youtube.com SetSID)
+    if (url.startsWith('https://music.youtube.com')) {
       const secret = await getSigningSecret();
       if (secret) {
-        console.log('[Desktop] YouTube authentication detected!');
+        console.log('[Desktop] music.youtube.com reached, verifying session...');
         cachedAccounts = null;
-        if (onComplete) onComplete();
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-            authWindow = null;
-          }
-        }, 1000);
+        const accounts = await readAccounts(true);
+        if (accounts.length > 0) {
+          verified = true;
+          console.log('[Desktop] YouTube authentication verified successfully!');
+          if (onComplete) onComplete();
+          setTimeout(() => {
+            if (authWindow && !authWindow.isDestroyed()) {
+              authWindow.close();
+              authWindow = null;
+            }
+          }, 1500);
+        }
       }
     }
   };
 
   authWindow.webContents.on('did-navigate', (_event, url) => checkRedirect(url));
   authWindow.webContents.on('did-navigate-in-page', (_event, url) => checkRedirect(url));
+  authWindow.webContents.on('did-frame-finish-load', () => {
+    const currentUrl = authWindow?.webContents?.getURL() || '';
+    checkRedirect(currentUrl);
+  });
 
-  authWindow.on('closed', () => {
+  authWindow.on('closed', async () => {
     authWindow = null;
     cachedAccounts = null;
     if (onComplete) onComplete();
@@ -411,14 +439,6 @@ async function importCookies(cookieString) {
       await session.defaultSession.cookies.set({
         url: 'https://music.youtube.com',
         domain: '.youtube.com',
-        name,
-        value,
-        path: '/',
-        secure: true,
-      });
-      await session.defaultSession.cookies.set({
-        url: 'https://www.google.com',
-        domain: '.google.com',
         name,
         value,
         path: '/',

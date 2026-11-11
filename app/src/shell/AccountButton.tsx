@@ -1,6 +1,7 @@
 import { ArrowUpRight, ChevronsUpDown } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
+import { getBridge } from '@/extension/bridge';
 import { useRefreshYtAuth, useSelectChannel, useSetConnected, useYtAuth } from '@/extension/useYtAuth';
 
 const SIGN_IN_URL = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/';
@@ -54,15 +55,17 @@ export function AccountButton() {
     );
   }
   if (!auth.active) {
-    // Signed in to the browser, but the account couldn't be read (the reason is on the Extension page).
     return (
       <button
         className={pill}
         title={auth.problem ?? undefined}
-        onClick={() => refresh.mutate()}
+        onClick={() => {
+          refresh.mutate();
+          void getBridge()?.call('yt.signIn', {});
+        }}
         disabled={refresh.isPending}
       >
-        {refresh.isPending ? 'Reading account…' : 'Retry YouTube Sign-In'}
+        {refresh.isPending ? 'Reading account…' : 'Sign in to YouTube'}
       </button>
     );
   }
