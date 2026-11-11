@@ -15,18 +15,19 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 ---
 
-## 🛠️ How to Setup & Run
+## 📥 Download & Setup (Pre-built Windows App)
 
-### Option 1: Run the Pre-built Desktop App (Recommended for Users)
+You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-1. Navigate to `desktop/dist-electron/`.
-2. Choose one of the following:
-   - **Installer:** Run `SudinChord Setup 1.0.0.exe` to install SudinChord onto your Windows PC with desktop and Start Menu shortcuts.
-   - **Portable:** Open `desktop/dist-electron/win-unpacked/SudinChord.exe` directly without installation.
+👉 **[Download SudinChord Setup 1.0.0.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.0.0/SudinChord.Setup.1.0.0.exe)**
+
+Or view all releases at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
+
+> **Note:** The `desktop/dist-electron/` directory contains compiled binaries (.exe files) which are excluded from the git source tree due to file size limits. They are automatically generated when you build from source (see below) or can be downloaded directly from the Releases link above.
 
 ---
 
-### Option 2: Setup & Build from Source (For Developers)
+## 🛠️ How to Build from Source (For Developers)
 
 #### Prerequisites
 - **[Node.js](https://nodejs.org/)** (v22.0.0 or higher)
