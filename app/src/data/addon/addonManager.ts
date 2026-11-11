@@ -1,0 +1,250 @@
+export interface AddonManifest {
+  id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  icon?: string;
+  resources?: string[];
+  types?: string[];
+  catalogs?: Array<{ id: string; name: string; type: string }>;
+}
+
+export interface AddonTrack {
+  id: string;
+  title: string;
+  artist?: string;
+  album?: string;
+  duration?: number;
+  durationMs?: number;
+  format?: string;
+  audioQuality?: string;
+  artworkURL?: string;
+  streamURL?: string;
+  bitrate?: number;
+}
+
+export interface AddonStreamResult {
+  url?: string;
+  codec?: string;
+  format?: string;
+  audioQuality?: string;
+  bitrate?: number;
+  kbps?: number;
+  sampleRate?: number;
+  error?: string;
+}
+
+export interface InstalledAddon {
+  id: string;
+  url: string;
+  name: string;
+  version?: string;
+  description?: string;
+  icon?: string;
+  enabled: boolean;
+  status: 'connected' | 'error' | 'validating';
+  errorMessage?: string | null;
+  createdAt: number;
+}
+
+export interface MultiAddonState {
+  addons: InstalledAddon[];
+  losslessEnabled: boolean;
+}
+
+const STORAGE_ADDONS_KEY = 'sudinchord_addons_list';
+const STORAGE_ENABLED_KEY = 'sudinchord_addon_enabled';
+const LEGACY_STORAGE_URL_KEY = 'sudinchord_addon_url';
+
+class AddonStore {
+  private state: MultiAddonState = {
+    addons: [],
+    losslessEnabled: true,
+  };
+
+  private listeners = new Set<(state: MultiAddonState) => void>();
+
+  constructor() {
+    this.init();
+  }
+
+  private init() {
+    try {
+      const storedEnabled = localStorage.getItem(STORAGE_ENABLED_KEY);
+      this.state.losslessEnabled = storedEnabled !== null ? storedEnabled === 'true' : true;
+
+      const rawAddons = localStorage.getItem(STORAGE_ADDONS_KEY);
+      if (rawAddons) {
+        const parsed = JSON.parse(rawAddons) as InstalledAddon[];
+        if (Array.isArray(parsed)) {
+          this.state.addons = parsed;
+        }
+      } else {
+        // Check for legacy single addon migration
+        const legacyUrl = localStorage.getItem(LEGACY_STORAGE_URL_KEY);
+        if (legacyUrl) {
+          void this.addAddon(legacyUrl);
+        }
+      }
+
+      // Re-verify manifest for each installed addon in background
+      for (const addon of this.state.addons) {
+        void this.verifyAddon(addon.id, addon.url);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  getState(): MultiAddonState {
+    return this.state;
+  }
+
+  subscribe(listener: (state: MultiAddonState) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify() {
+    for (const listener of this.listeners) {
+      listener(this.state);
+    }
+    this.persist();
+  }
+
+  private persist() {
+    try {
+      localStorage.setItem(STORAGE_ADDONS_KEY, JSON.stringify(this.state.addons));
+      localStorage.setItem(STORAGE_ENABLED_KEY, String(this.state.losslessEnabled));
+    } catch {}
+  }
+
+  setLosslessEnabled(enabled: boolean) {
+    this.state = { ...this.state, losslessEnabled: enabled };
+    this.notify();
+  }
+
+  async addAddon(rawUrl: string): Promise<{ ok: boolean; error?: string }> {
+    const cleanUrl = rawUrl.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, '');
+    if (!cleanUrl) {
+      return { ok: false, error: 'Addon URL cannot be empty' };
+    }
+
+    // Check duplicate URL
+    if (this.state.addons.some((a) => a.url.toLowerCase() === cleanUrl.toLowerCase())) {
+      return { ok: false, error: 'This addon is already added' };
+    }
+
+    try {
+      const manifest = await this.fetchManifest(cleanUrl);
+      const newAddon: InstalledAddon = {
+        id: manifest.id || `addon_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        url: cleanUrl,
+        name: manifest.name || 'Custom Music Addon',
+        version: manifest.version,
+        description: manifest.description,
+        icon: manifest.icon,
+        enabled: true,
+        status: 'connected',
+        errorMessage: null,
+        createdAt: Date.now(),
+      };
+
+      // If id already exists (e.g. from previous uninstall), ensure unique id
+      if (this.state.addons.some((a) => a.id === newAddon.id)) {
+        newAddon.id = `${newAddon.id}_${Date.now()}`;
+      }
+
+      this.state = {
+        ...this.state,
+        addons: [...this.state.addons, newAddon],
+      };
+      this.notify();
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
+  }
+
+  removeAddon(id: string) {
+    this.state = {
+      ...this.state,
+      addons: this.state.addons.filter((a) => a.id !== id),
+    };
+    this.notify();
+  }
+
+  toggleAddon(id: string, enabled: boolean) {
+    this.state = {
+      ...this.state,
+      addons: this.state.addons.map((a) => (a.id === id ? { ...a, enabled } : a)),
+    };
+    this.notify();
+  }
+
+  moveAddon(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= this.state.addons.length) return;
+
+    const list = [...this.state.addons];
+    const [moved] = list.splice(index, 1);
+    if (!moved) return;
+    list.splice(targetIndex, 0, moved);
+
+    this.state = { ...this.state, addons: list };
+    this.notify();
+  }
+
+  private async fetchManifest(baseUrl: string): Promise<AddonManifest> {
+    const manifestUrl = `${baseUrl}/manifest.json`;
+    const res = await fetch(manifestUrl, { headers: { Accept: 'application/json' } });
+    if (!res.ok) {
+      throw new Error(`Addon server responded with status ${res.status}`);
+    }
+    const data = (await res.json()) as AddonManifest;
+    if (!data || !data.id) {
+      throw new Error('Server returned an invalid addon manifest (missing id)');
+    }
+    return data;
+  }
+
+  private async verifyAddon(id: string, url: string) {
+    try {
+      const manifest = await this.fetchManifest(url);
+      this.state = {
+        ...this.state,
+        addons: this.state.addons.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                name: manifest.name || a.name,
+                version: manifest.version ?? a.version,
+                description: manifest.description ?? a.description,
+                icon: manifest.icon ?? a.icon,
+                status: 'connected',
+                errorMessage: null,
+              }
+            : a,
+        ),
+      };
+      this.notify();
+    } catch (err) {
+      this.state = {
+        ...this.state,
+        addons: this.state.addons.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                status: 'error',
+                errorMessage: err instanceof Error ? err.message : String(err),
+              }
+            : a,
+        ),
+      };
+      this.notify();
+    }
+  }
+}
+
+export const addonStore = new AddonStore();

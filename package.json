@@ -1,0 +1,24 @@
+{
+  "name": "sudinchord-desktop",
+  "version": "1.0.0",
+  "description": "SudinChord Desktop for Windows 11",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @bitchord/app dev",
+    "dev:ext": "pnpm --filter @bitchord/extension dev",
+    "dev:ext:firefox": "pnpm --filter @bitchord/extension dev:firefox",
+    "desktop": "pnpm --filter @bitchord/desktop dev",
+    "desktop:start": "pnpm --filter @bitchord/desktop start",
+    "desktop:build": "pnpm --filter @bitchord/desktop build:win",
+    "build": "pnpm -r build",
+    "build:site": "pnpm --filter @bitchord/extension package && pnpm --filter @bitchord/app build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "fixtures": "node scripts/capture-fixtures.mjs"
+  }
+}

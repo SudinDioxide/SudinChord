@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sign in to YouTube Music - SudinChord</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0f12;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 28px 24px;
+      user-select: none;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    p.desc {
+      font-size: 13px;
+      color: #9ca3af;
+      line-height: 1.45;
+      margin-bottom: 20px;
+    }
+    .step {
+      background: #16191f;
+      border: 1px solid #232730;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
+    }
+    .step-title {
+      font-weight: 600;
+      color: #e5e7eb;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-badge {
+      background: #ff0033;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+    .code-box {
+      background: #090a0d;
+      border: 1px solid #2d3340;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: text;
+    }
+    button.btn-action {
+      background: #232730;
+      border: 1px solid #3b4252;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.btn-action:hover {
+      background: #2e3442;
+    }
+    textarea {
+      width: 100%;
+      height: 70px;
+      background: #090a0d;
+      border: 1px solid #2d3340;
+      border-radius: 8px;
+      color: #f3f4f6;
+      padding: 10px;
+      font-size: 12px;
+      font-family: monospace;
+      resize: none;
+      outline: none;
+      margin-top: 6px;
+    }
+    textarea:focus {
+      border-color: #ff0033;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+    }
+    button.btn-primary {
+      background: #ff0033;
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button.btn-primary:hover {
+      opacity: 0.9;
+    }
+    .status-msg {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 6px;
+      min-height: 18px;
+    }
+    .status-msg.success {
+      color: #22c55e;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sign in to YouTube Music</h1>
+  <p class="desc">
+    Sign in to access your YouTube Music library, playlists, and personalized recommendations:
+  </p>
+
+  <div style="background: #181d26; border: 1px solid #2d3340; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+    <div>
+      <div style="font-weight: 600; color: #fff; font-size: 14px;">Sign in directly</div>
+      <div style="color: #9ca3af; font-size: 12px; margin-top: 2px;">Open Google Accounts login window</div>
+    </div>
+    <button class="btn-primary" id="btnOpenGoogleDirect" style="padding: 8px 18px; font-size: 13px;">Sign In</button>
+  </div>
+
+  <div style="text-align: center; color: #6b7280; font-size: 11px; font-weight: 600; margin-bottom: 16px; position: relative;">
+    <span style="background: #0d0f12; padding: 0 10px; position: relative; z-index: 1;">OR CONNECT VIA BROWSER SESSION</span>
+    <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #232730; z-index: 0;"></div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">
+      <span class="step-badge">1</span> Open YouTube Music in your browser
+    </div>
+    <div style="margin-top: 8px;">
+      <button class="btn-action" id="btnOpenBrowser">Open music.youtube.com &rarr;</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">
+      <span class="step-badge">2</span> Copy your session cookies
+    </div>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 4px;">
+      In your browser tab on music.youtube.com, press <kbd>F12</kbd> (or right click &rarr; Inspect), click <strong>Console</strong>, paste this command and press <kbd>Enter</kbd>:
+    </p>
+    <div class="code-box">
+      <span>copy(document.cookie)</span>
+      <button class="btn-action" id="btnCopySnippet">Copy Command</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">
+      <span class="step-badge">3</span> Paste cookies here
+    </div>
+    <textarea id="cookieInput" placeholder="Paste (Ctrl+V) the copied cookie string here..."></textarea>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-action" id="btnCancel">Cancel</button>
+    <button class="btn-primary" id="btnConnect">Connect Account</button>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    document.getElementById('btnOpenGoogleDirect').addEventListener('click', () => {
+      ipcRenderer.send('login:open-google-direct');
+      window.close();
+    });
+
+    document.getElementById('btnOpenBrowser').addEventListener('click', () => {
+      ipcRenderer.send('login:open-external');
+    });
+
+    document.getElementById('btnCopySnippet').addEventListener('click', () => {
+      navigator.clipboard.writeText('copy(document.cookie)');
+      document.getElementById('btnCopySnippet').textContent = 'Copied!';
+      setTimeout(() => {
+        document.getElementById('btnCopySnippet').textContent = 'Copy Command';
+      }, 2000);
+    });
+
+    document.getElementById('btnCancel').addEventListener('click', () => {
+      window.close();
+    });
+
+    document.getElementById('btnConnect').addEventListener('click', async () => {
+      const text = document.getElementById('cookieInput').value.trim();
+      const status = document.getElementById('statusMsg');
+      if (!text) {
+        status.textContent = 'Please paste your cookie string above first.';
+        return;
+      }
+
+      status.className = 'status-msg';
+      status.textContent = 'Connecting and verifying account...';
+
+      const success = await ipcRenderer.invoke('login:submit-cookies', text);
+      if (success) {
+        status.className = 'status-msg success';
+        status.textContent = 'Signed in successfully! Closing...';
+        setTimeout(() => window.close(), 1000);
+      } else {
+        status.className = 'status-msg';
+        status.textContent = 'Could not find a valid YouTube session in the pasted text. Make sure you are logged in on music.youtube.com.';
+      }
+    });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-electron/
+desktop/dist-electron/
+desktop/bin/*.exe
+desktop/bin/
+*.exe
+*.blockmap
+*.zip
+metadata_cache.json
+*.log
+.output/
+.wxt/
+*.tsbuildinfo
+.env.local
+
+# Built extension zips (web/extension: pnpm package)
+app/public/downloads/

@@ -1,0 +1,60 @@
+{
+  "name": "@bitchord/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SudinChord Desktop for Windows 11",
+  "main": "main.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "sync": "node scripts/sync-assets.js",
+    "start": "node scripts/sync-assets.js && electron .",
+    "dev": "electron . --dev",
+    "prebuild": "node scripts/sync-assets.js",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.music.sudinchord.desktop",
+    "productName": "SudinChord",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "localMetadata.cjs",
+      "ytAuth.cjs",
+      "spotifyAuth.cjs",
+      "loginModal.html",
+      "dist/**/*",
+      "extension/**/*",
+      "bin/**/*",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "dir"
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0"
+  }
+}
