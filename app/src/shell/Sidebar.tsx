@@ -1,4 +1,4 @@
-import { ArrowUpRight, ListMusic, Settings } from 'lucide-react';
+import { ListMusic, Settings } from 'lucide-react';
 import { MdOutlineExtension } from 'react-icons/md';
 import { PrefetchLink, PrefetchNavLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
@@ -180,13 +180,10 @@ export function Sidebar() {
             )}
           </PrefetchNavLink>
           <AccountButton />
-          <div className="flex items-center justify-between">
-            <a className="inline-flex items-center gap-1 ps-1 type-callout text-primary hover:underline" href={config.androidAppUrl} target="_blank" rel="noreferrer">
-              <span>Get the Android app</span>
-              <ArrowUpRight size={14} strokeWidth={2} />
-            </a>
-            <PrefetchNavLink to="/settings" className="grid size-7 place-items-center rounded-nav text-secondary hover:bg-quinary hover:text-primary aria-[current=page]:bg-quinary aria-[current=page]:text-primary" aria-label="Settings" title="Settings" onClick={close}>
-              <Settings size={17} strokeWidth={1.9} />
+          <div className="flex items-center justify-between pt-1">
+            <PrefetchNavLink to="/settings" className="inline-flex items-center gap-2 ps-1 type-callout text-secondary hover:text-primary" aria-label="Settings" title="Settings" onClick={close}>
+              <Settings size={16} strokeWidth={1.9} />
+              <span>Settings</span>
             </PrefetchNavLink>
           </div>
         </div>

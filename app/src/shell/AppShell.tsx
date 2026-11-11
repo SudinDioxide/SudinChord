@@ -100,22 +100,10 @@ export function AppShell() {
   }, [navigate]);
 
   let banner = null;
-  if (mobile) {
+  if (extension.state === 'missing' && !bannerDismissed) {
     banner = (
       <Banner
-        title="BitChord is better in the app."
-        detail="Phone browsers can’t run the BitChord extension. The Android app has everything."
-        action={
-          <a className={bannerButtonClass} href={config.androidAppUrl} target="_blank" rel="noreferrer">
-            Get the App
-          </a>
-        }
-      />
-    );
-  } else if (extension.state === 'missing' && !bannerDismissed) {
-    banner = (
-      <Banner
-        title="Play YouTube Music with the BitChord extension."
+        title="Play YouTube Music with the SudinChord extension."
         detail="Playback, YouTube Music sign-in, Spotify and Discord need the extension. Addons and lyrics work without it."
         action={
           <PrefetchLink className={bannerButtonClass} to="/extension">
