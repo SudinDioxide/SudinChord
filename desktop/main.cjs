@@ -10,6 +10,8 @@ const ytAuth = require('./ytAuth.cjs');
 const spotifyAuth = require('./spotifyAuth.cjs');
 const { extractMetadata, extractArtwork, AUDIO_EXTS } = require('./localMetadata.cjs');
 
+app.name = 'SudinChord';
+
 // Persistent metadata cache for instant folder scans
 const metadataCache = new Map();
 let metadataCacheLoaded = false;
