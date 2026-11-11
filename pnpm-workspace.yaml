@@ -14,3 +14,4 @@ minimumReleaseAgeExclude:
 allowBuilds:
   protobufjs: false
   electron: true
+  ffmpeg-static: false
