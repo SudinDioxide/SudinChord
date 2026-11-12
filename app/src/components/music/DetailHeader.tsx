@@ -1,5 +1,6 @@
-import { Check, Plus, Shuffle } from 'lucide-react';
+import { Check, ChevronLeft, Plus, Shuffle } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { PlayIcon } from '@/components/icons/Transport';
 import { useSetListSaved, useSignedIn } from '@/data/music/queries';
@@ -34,12 +35,33 @@ export const detailButton = {
  */
 export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }: DetailHeaderProps) {
   const [expanded, setExpanded] = useState(false);
+  const navigate = useNavigate();
   const signedIn = useSignedIn();
   const setSaved = useSetListSaved();
   const library = signedIn ? info.library : null;
+
+  const handleBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/home');
+    }
+  };
+
   return (
-    // Artwork beside the headings, description and actions; stacked and centred below 768px.
-    <div className="mx-(--body-gutter) mb-10 grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-11 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-4 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
+    <div className="mx-(--body-gutter) pt-6">
+      <button
+        type="button"
+        onClick={handleBack}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-secondary hover:text-primary type-callout transition-colors cursor-pointer mb-2"
+        title="Go back"
+      >
+        <ChevronLeft size={16} strokeWidth={2.2} />
+        <span>Back</span>
+      </button>
+      {/* Artwork beside the headings, description and actions; stacked and centred below 768px. */}
+      <div className="mb-10 grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-3 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-2 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
       <div className="relative w-[270px] self-start rounded-artwork-lg shadow-[0_10px_20px_0_var(--radiosityShadowColor)] [grid-area:artwork] max-lg:w-[220px] max-md:w-[min(270px,70vw)]">
         {info.thumbnail && (
           // A blurred copy behind the artwork: Apple's radiosity glow.
@@ -118,5 +140,6 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }
         {extra}
       </div>
     </div>
+  </div>
   );
 }

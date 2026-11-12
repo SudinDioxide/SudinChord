@@ -42,5 +42,5 @@ pnpm --filter @bitchord/desktop start
 pnpm desktop:build
 ```
 The output files will be created in `web/desktop/dist-electron/`:
-- `SudinChord-Setup-1.1.2.exe` (Full NSIS Windows installer)
+- `SudinChord-Setup-1.1.3.exe` (Full NSIS Windows installer)
 - `win-unpacked/` (Unpacked portable folder ready to run `SudinChord.exe` directly)

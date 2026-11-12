@@ -28,12 +28,33 @@ function focusSearch(navigate: ReturnType<typeof useNavigate>) {
  * The web player's shortcuts, which BitChord matches (report §8): Space
  * play/pause; ⌘/Ctrl+→ / ← next/previous; ⌘/Ctrl+↑ / ↓ volume; ⌘/Ctrl+F or
  * "/" focuses search; Esc closes the full-screen player, else the side panel.
+ * Also supports Alt+← / Alt+→ and Mouse 4/5 for Back and Forward navigation.
  */
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey) return;
+      if (event.defaultPrevented) return;
+
+      // History navigation: Alt + ArrowLeft / Alt + ArrowRight
+      if (event.altKey && !typing(event.target)) {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+          if (idx > 0) navigate(-1);
+          else navigate('/home');
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          navigate(1);
+          return;
+        }
+        return;
+      }
+
+      if (event.altKey) return;
       const player = usePlayer.getState();
       const command = event.metaKey || event.ctrlKey;
 
@@ -77,7 +98,26 @@ export function useKeyboardShortcuts() {
           return player.setVolume(player.volume - 0.1);
       }
     };
+
+    const onMouse = (e: MouseEvent) => {
+      if (e.button === 3) {
+        // Mouse Back button
+        e.preventDefault();
+        const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+        if (idx > 0) navigate(-1);
+        else navigate('/home');
+      } else if (e.button === 4) {
+        // Mouse Forward button
+        e.preventDefault();
+        navigate(1);
+      }
+    };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('mouseup', onMouse);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mouseup', onMouse);
+    };
   }, [navigate]);
 }
