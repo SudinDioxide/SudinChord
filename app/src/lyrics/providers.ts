@@ -889,3 +889,202 @@ export async function lyrica(q: LyricsQuery): Promise<Parsed | null> {
 
   return null;
 }
+
+// ---- NetEase Cloud Music (NetEase.kt) ----------------------------------------------------
+
+interface NetEaseSong {
+  id: number;
+  name?: string;
+  dt?: number; // duration ms
+  ar?: { name?: string }[];
+}
+
+interface NetEaseSearchResponse {
+  result?: {
+    songs?: NetEaseSong[];
+  };
+}
+
+interface NetEaseLyricResponse {
+  lrc?: { lyric?: string };
+  tlyric?: { lyric?: string };
+  romalrc?: { lyric?: string };
+  klyric?: { lyric?: string };
+}
+
+function parseLrcToMap(raw: string | undefined): { byTime: Map<number, string>; byIndex: string[] } {
+  const byTime = new Map<number, string>();
+  const byIndex: string[] = [];
+  if (!raw) return { byTime, byIndex };
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const stampRegex = /\[(\d{1,2}):(\d{2})(?:[.:](\d{2,3}))?\]/g;
+  for (const row of lines) {
+    const text = row.replace(stampRegex, '').trim();
+    if (!text || text.startsWith('作词') || text.startsWith('作曲') || text.startsWith('编曲') || text.startsWith('制作人')) continue;
+    let match: RegExpExecArray | null;
+    stampRegex.lastIndex = 0;
+    let matched = false;
+    while ((match = stampRegex.exec(row)) !== null) {
+      const min = Number(match[1]);
+      const sec = Number(match[2]);
+      const frac = match[3] ? (match[3].length === 3 ? Number(match[3]) : Number(match[3]) * 10) : 0;
+      const timeMs = min * 60_000 + sec * 1000 + frac;
+      byTime.set(timeMs, text);
+      matched = true;
+    }
+    if (matched) {
+      byIndex.push(text);
+    }
+  }
+  return { byTime, byIndex };
+}
+
+function findMatchingAux(byTime: Map<number, string>, timeMs: number, byIndex: string[], index: number): string | undefined {
+  if (byTime.has(timeMs)) return byTime.get(timeMs);
+  // Tolerance matching within 350ms
+  for (const [t, val] of byTime.entries()) {
+    if (Math.abs(t - timeMs) <= 350) return val;
+  }
+  return byIndex[index] || undefined;
+}
+
+export async function netEase(q: LyricsQuery): Promise<Parsed | null> {
+  const query = `${q.title} ${q.artist}`.trim();
+  if (!query) return null;
+
+  const searchUrl = urlWith('https://music.163.com/api/cloudsearch/pc', {
+    s: query,
+    type: 1,
+    offset: 0,
+    limit: 5,
+  });
+
+  const headers = {
+    Referer: 'https://music.163.com',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
+  const searchRes = json<NetEaseSearchResponse>(await lyricsGet(searchUrl, { headers }));
+  const songs = searchRes?.result?.songs;
+  if (!songs || !songs.length) return null;
+
+  // Find best song hit matching duration or first
+  let songId = songs[0]!.id;
+  if (q.durationMs > 0) {
+    const matched = songs.find((s) => s.dt && Math.abs(s.dt - q.durationMs) < 6000);
+    if (matched) songId = matched.id;
+  }
+
+  const lyricUrl = urlWith('https://music.163.com/api/song/lyric', {
+    id: songId,
+    lv: 1,
+    kv: 1,
+    tv: 1,
+    rv: 1,
+  });
+
+  const lyricRes = json<NetEaseLyricResponse>(await lyricsGet(lyricUrl, { headers }));
+  const rawLrc = lyricRes?.lrc?.lyric;
+  if (!rawLrc || !rawLrc.trim()) return null;
+
+  const parsedLines = parseLrc(rawLrc);
+  if (!parsedLines.length) return null;
+
+  const transParsed = parseLrcToMap(lyricRes?.tlyric?.lyric);
+  const romanParsed = parseLrcToMap(lyricRes?.romalrc?.lyric || lyricRes?.klyric?.lyric);
+
+  const merged = parsedLines.map((l, idx) => {
+    const translation = findMatchingAux(transParsed.byTime, l.timeMs, transParsed.byIndex, idx);
+    const romanized = findMatchingAux(romanParsed.byTime, l.timeMs, romanParsed.byIndex, idx);
+    return {
+      ...l,
+      translation: translation || undefined,
+      romanized: romanized || undefined,
+    };
+  });
+
+  const withGaps = withInstrumentalGaps(merged);
+  return { lines: withGaps, ttml: writeTtml(withGaps) };
+}
+
+// ---- QQ Music (QQMusic.kt) -------------------------------------------------------------
+
+interface QQMusicSong {
+  songmid?: string;
+  interval?: number;
+}
+
+interface QQMusicSearchResponse {
+  data?: {
+    song?: {
+      list?: QQMusicSong[];
+    };
+  };
+}
+
+interface QQMusicLyricResponse {
+  lyric?: string;
+  trans?: string;
+}
+
+export async function qqMusic(q: LyricsQuery): Promise<Parsed | null> {
+  const query = `${q.title} ${q.artist}`.trim();
+  if (!query) return null;
+
+  const searchUrl = urlWith('https://c.y.qq.com/soso/fcgi-bin/client_search_cp', {
+    p: 1,
+    n: 3,
+    w: query,
+    format: 'json',
+  });
+
+  const headers = {
+    Referer: 'https://y.qq.com',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
+  const searchRes = json<QQMusicSearchResponse>(await lyricsGet(searchUrl, { headers }));
+  const list = searchRes?.data?.song?.list;
+  if (!list || !list.length) return null;
+
+  let songmid = list[0]!.songmid;
+  if (q.durationMs > 0) {
+    const sec = Math.round(q.durationMs / 1000);
+    const matched = list.find((s) => s.interval && Math.abs(s.interval - sec) <= 6);
+    if (matched?.songmid) songmid = matched.songmid;
+  }
+  if (!songmid) return null;
+
+  const lyricUrl = urlWith('https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg', {
+    songmid,
+    format: 'json',
+    nobase64: 1,
+  });
+
+  const lyricRes = json<QQMusicLyricResponse>(await lyricsGet(lyricUrl, { headers }));
+  let rawLyric = lyricRes?.lyric;
+  let rawTrans = lyricRes?.trans;
+
+  if (rawLyric && !rawLyric.includes('[')) {
+    try { rawLyric = atob(rawLyric); } catch {}
+  }
+  if (rawTrans && !rawTrans.includes('[')) {
+    try { rawTrans = atob(rawTrans); } catch {}
+  }
+
+  if (!rawLyric || !rawLyric.trim()) return null;
+  const parsedLines = parseLrc(rawLyric);
+  if (!parsedLines.length) return null;
+
+  const transParsed = parseLrcToMap(rawTrans);
+  const merged = parsedLines.map((l, idx) => {
+    const translation = findMatchingAux(transParsed.byTime, l.timeMs, transParsed.byIndex, idx);
+    return {
+      ...l,
+      translation: translation || undefined,
+    };
+  });
+
+  const withGaps = withInstrumentalGaps(merged);
+  return { lines: withGaps, ttml: writeTtml(withGaps) };
+}

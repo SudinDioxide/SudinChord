@@ -6,10 +6,12 @@ function AppleToggle({
   checked,
   onChange,
   label,
+  activeColor = '#fa233b',
 }: {
   checked: boolean;
   onChange: (val: boolean) => void;
   label?: string;
+  activeColor?: string;
 }) {
   return (
     <button
@@ -26,13 +28,15 @@ function AppleToggle({
         height: '24px',
         padding: '2px',
         borderRadius: '9999px',
-        backgroundColor: checked ? '#34c759' : 'rgba(255, 255, 255, 0.16)',
+        backgroundColor: checked ? activeColor : 'rgba(255, 255, 255, 0.16)',
         border: 'none',
         outline: 'none',
         cursor: 'pointer',
         boxSizing: 'border-box',
         transition: 'background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease',
-        boxShadow: checked ? '0 0 10px rgba(52, 199, 89, 0.45)' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.12)',
+        boxShadow: checked
+          ? `0 0 12px ${activeColor === '#fa233b' ? 'rgba(250, 35, 59, 0.5)' : 'rgba(52, 199, 89, 0.45)'}`
+          : 'inset 0 0 0 1px rgba(255, 255, 255, 0.12)',
         flexShrink: 0,
         userSelect: 'none',
         verticalAlign: 'middle',

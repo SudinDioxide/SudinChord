@@ -4,6 +4,8 @@
  * reorder and switch them off, as on the desktop (useLyricsSettings).
  */
 export const LYRICS_SOURCES = [
+  { id: 'netease', label: 'NetEase Music', detail: 'Synchronized lyrics with native translation and romanization', wordSynced: false },
+  { id: 'qq-music', label: 'QQ Music', detail: 'Official Tencent lyrics with translation', wordSynced: false },
   { id: 'lrc-red', label: 'lrc.red', detail: 'Apple timings by recording, syllable by syllable', wordSynced: true },
   { id: 'bini', label: 'BiniLyrics', detail: 'The same Apple timings, matched on the recording itself', wordSynced: true },
   { id: 'better-lyrics', label: 'BetterLyrics', detail: 'Apple Music timings, word by word', wordSynced: true },

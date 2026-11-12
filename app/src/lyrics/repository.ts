@@ -121,6 +121,10 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
   const fetchFrom = (source: LyricsSourceId): Promise<Parsed | null> => {
     switch (source) {
+      case 'netease':
+        return providers.netEase(query);
+      case 'qq-music':
+        return providers.qqMusic(query);
       case 'lrc-red':
         return providers.lrcRed(query, get);
       case 'bini':
@@ -161,9 +165,10 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
     }
   };
 
-  const run = (source: LyricsSourceId) => {
+  // 5-second strict timeout: if a provider loads for > 5 seconds, change to another API
+  const run = (source: LyricsSourceId): Promise<LyricsResult | null> => {
     onSource?.(source, 'pending');
-    return fetchFrom(source)
+    return withTimeout(fetchFrom(source), 5000)
       .catch(() => null)
       .then((parsed) => {
         const result = parsed?.lines.some((l) => l.text.trim()) ? toResult(source, parsed) : null;
@@ -172,27 +177,66 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
       });
   };
 
-  // Genius starts lazily: only if it's reached.
-  const racing = sequence.map((source) => ({ source, job: source === 'genius' ? null : run(source) }));
-  let lineSynced: LyricsResult | null = null;
-  let plain: LyricsResult | null = null;
-  let winner: LyricsResult | null = null;
-  for (const entry of racing) {
-    if (entry.source === 'genius' && (lineSynced || plain)) continue;
-    const found = await (entry.job ?? run(entry.source));
-    if (!found) continue;
-    if (found.wordSynced) {
-      winner = found;
-      break;
-    }
-    if (found.synced && !preferSyllables) {
-      winner = found;
-      break;
-    }
-    if (found.synced) lineSynced ??= found;
-    else plain ??= found;
+  // Rule: "If only got one lyric api, stay on that"
+  if (sequence.length === 1) {
+    const single = await run(sequence[0]!);
+    cache.set(key, { at: Date.now(), result: single });
+    return single;
   }
-  winner ??= lineSynced ?? plain;
+
+  // Check whether a result has Romanization or Translation
+  const hasRomanOrTrans = (r: LyricsResult | null) =>
+    Boolean(
+      r &&
+        r.lines.some(
+          (l) =>
+            (l.romanized && l.romanized.trim().length > 0) ||
+            (l.translation && l.translation.trim().length > 0),
+        ),
+    );
+
+  let bestRichSynced: LyricsResult | null = null; // Synced + (Romanized or Translated)
+  let bestWordSynced: LyricsResult | null = null; // Syllable/word synced
+  let bestLineSynced: LyricsResult | null = null; // Line synced
+  const plainCandidates: LyricsResult[] = []; // Plain lyrics for random fallback
+
+  for (const source of sequence) {
+    if (source === 'genius' && (bestRichSynced || bestWordSynced || bestLineSynced)) continue;
+
+    const found = await run(source);
+    if (!found) continue;
+
+    if (found.synced) {
+      // 1. Highest priority: choose lyric that got romanize and translation
+      if (hasRomanOrTrans(found)) {
+        bestRichSynced = found;
+        break; // Immediate top pick! Stop and return this rich result!
+      }
+
+      if (found.wordSynced && !bestWordSynced) {
+        bestWordSynced = found;
+      } else if (!bestLineSynced) {
+        bestLineSynced = found;
+      }
+    } else {
+      plainCandidates.push(found);
+    }
+  }
+
+  // Winner selection hierarchy:
+  // 1. Synced with romanization and/or translation
+  // 2. Word-synced or line-synced lyrics
+  // 3. Random choice among plain lyric providers
+  let winner: LyricsResult | null =
+    bestRichSynced ??
+    (preferSyllables ? (bestWordSynced ?? bestLineSynced) : (bestWordSynced ?? bestLineSynced));
+
+  if (!winner && plainCandidates.length > 0) {
+    // "if not, choose random lyric api that got plain lyric"
+    const randomIndex = Math.floor(Math.random() * plainCandidates.length);
+    winner = plainCandidates[randomIndex] ?? plainCandidates[0]!;
+  }
+
   cache.set(key, { at: Date.now(), result: winner });
   return winner;
 }
