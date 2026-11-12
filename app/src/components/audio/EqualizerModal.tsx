@@ -1,5 +1,6 @@
+import { useState, useRef } from 'react';
 import { useAudioFx, EQ_FREQUENCIES, EQ_PRESETS } from '@/state/audioFx';
-import { X, Sliders, Volume2, RotateCcw } from 'lucide-react';
+import { X, Sliders, Volume2, RotateCcw, ChevronDown, Check } from 'lucide-react';
 
 export function EqualizerModal() {
   const {
@@ -16,19 +17,67 @@ export function EqualizerModal() {
     resetEq,
   } = useAudioFx();
 
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const activeFaderRef = useRef<number | null>(null);
+
   if (!modalOpen) return null;
+
+  const currentPresetName =
+    EQ_PRESETS.find((p) => p.id === preset)?.name ?? (preset === 'custom' ? 'Custom' : 'Flat');
+
+  // Interactive fader pointer dragging
+  const handleFaderStart = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if (!eqEnabled) return;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    activeFaderRef.current = index;
+
+    const rect = target.getBoundingClientRect();
+    const update = (clientY: number) => {
+      const clampedY = Math.max(rect.top, Math.min(rect.bottom, clientY));
+      const fraction = 1 - (clampedY - rect.top) / rect.height; // 0 (bottom) to 1 (top)
+      const gain = Math.round((fraction * 24 - 12) * 2) / 2; // -12 to +12 dB with 0.5 step
+      setBandGain(index, Math.max(-12, Math.min(12, gain)));
+    };
+
+    update(e.clientY);
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (activeFaderRef.current === index) {
+        update(ev.clientY);
+      }
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {}
+      activeFaderRef.current = null;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+  };
 
   return (
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/65 p-4 backdrop-blur-md animate-in fade-in duration-200"
-      onClick={() => setModalOpen(false)}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={() => {
+        setPresetMenuOpen(false);
+        setModalOpen(false);
+      }}
       role="dialog"
       aria-modal="true"
       aria-label="Audio Equalizer & FX"
     >
       <div
-        className="relative flex w-full max-w-[640px] flex-col rounded-[24px] border border-white/12 bg-[#12141c]/95 p-6 shadow-2xl backdrop-blur-2xl"
-        onClick={(e) => e.stopPropagation()}
+        className="relative flex w-full max-w-[620px] flex-col rounded-[24px] border border-white/12 bg-[#12141c]/95 p-6 shadow-2xl backdrop-blur-2xl"
+        onClick={(e) => {
+          e.stopPropagation();
+          setPresetMenuOpen(false);
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -38,131 +87,210 @@ export function EqualizerModal() {
             </div>
             <div>
               <h2 className="text-base font-semibold text-white tracking-wide">Audio Equalizer & FX</h2>
-              <p className="text-xs text-white/50">Tune frequency response and dynamic range</p>
+              <p className="text-xs text-white/50">10-band studio frequency control & dynamics</p>
             </div>
           </div>
-          <button
-            onClick={() => setModalOpen(false)}
-            aria-label="Close"
-            className="flex size-8 items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* Top Controls: Equalizer & Loudness Normalizer Toggles */}
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          {/* EQ Switch */}
-          <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-3.5 border border-white/5">
-            <div>
-              <span className="text-sm font-medium text-white block">Equalizer</span>
-              <span className="text-xs text-white/40">{eqEnabled ? 'Active' : 'Bypassed'}</span>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={eqEnabled}
-              onClick={() => setEqEnabled(!eqEnabled)}
-              className={`relative h-6 w-11 rounded-full p-0.5 border transition-all ${
-                eqEnabled
-                  ? 'bg-primary border-primary/50 shadow-[0_0_12px_rgba(255,0,51,0.35)]'
-                  : 'bg-white/15 border-white/10'
-              }`}
-            >
-              <span
-                className={`block size-4.5 rounded-full bg-white shadow-md transition-transform ${
-                  eqEnabled ? 'translate-x-5' : 'translate-x-0'
+          <div className="flex items-center gap-3">
+            {/* Master EQ Switch */}
+            <div className="flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/10 px-3 py-1">
+              <span className="text-xs font-medium text-white/70">EQ</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={eqEnabled}
+                onClick={() => setEqEnabled(!eqEnabled)}
+                className={`relative h-5 w-9 rounded-full p-0.5 border transition-all ${
+                  eqEnabled
+                    ? 'bg-primary border-primary/60 shadow-[0_0_10px_rgba(255,0,51,0.4)]'
+                    : 'bg-white/15 border-white/10'
                 }`}
-              />
+              >
+                <span
+                  className={`block size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                    eqEnabled ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setModalOpen(false)}
+              aria-label="Close"
+              className="flex size-8 items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+            >
+              <X size={18} />
             </button>
           </div>
+        </div>
 
-          {/* Normalizer Switch */}
-          <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-3.5 border border-white/5">
-            <div className="flex items-center gap-2.5">
-              <Volume2 size={16} className="text-white/60" />
-              <div>
-                <span className="text-sm font-medium text-white block">Loudness Normalizer</span>
-                <span className="text-xs text-white/40">{normalization ? 'Equalized' : 'Raw'}</span>
+        {/* Toolbar: Presets Menu & Loudness Normalizer */}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          {/* Preset Selector Dropdown */}
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setPresetMenuOpen(!presetMenuOpen);
+              }}
+              className="h-8 px-3 rounded-[12px] bg-white/[0.07] border border-white/10 hover:bg-white/[0.12] text-white text-xs font-medium flex items-center gap-2 transition-all shadow-sm"
+            >
+              <span className="text-white/50">Preset:</span>
+              <span className="font-semibold text-white">{currentPresetName}</span>
+              <ChevronDown size={14} className="text-white/60" />
+            </button>
+
+            {presetMenuOpen && (
+              <div
+                className="absolute left-0 top-10 z-50 w-44 rounded-2xl border border-white/10 bg-[#161922]/98 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {EQ_PRESETS.map((p) => {
+                  const isSelected = preset === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setPreset(p.id);
+                        setPresetMenuOpen(false);
+                      }}
+                      className={`w-full h-8 px-2.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                        isSelected
+                          ? 'bg-white/15 text-white font-medium'
+                          : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <span>{p.name}</span>
+                      {isSelected && <Check size={14} className="text-white" />}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* Loudness Normalizer Toggle */}
+          <div className="flex items-center gap-2.5 rounded-[12px] bg-white/[0.05] border border-white/10 px-3 h-8">
+            <Volume2 size={14} className="text-white/60" />
+            <span className="text-xs text-white/80 font-medium">Loudness Normalizer</span>
             <button
               type="button"
               role="switch"
               aria-checked={normalization}
               onClick={() => setNormalization(!normalization)}
-              className={`relative h-6 w-11 rounded-full p-0.5 border transition-all ${
+              className={`relative h-4.5 w-8 rounded-full p-0.5 border transition-all ${
                 normalization
-                  ? 'bg-primary border-primary/50 shadow-[0_0_12px_rgba(255,0,51,0.35)]'
+                  ? 'bg-primary border-primary/60 shadow-[0_0_8px_rgba(255,0,51,0.35)]'
                   : 'bg-white/15 border-white/10'
               }`}
             >
               <span
-                className={`block size-4.5 rounded-full bg-white shadow-md transition-transform ${
-                  normalization ? 'translate-x-5' : 'translate-x-0'
+                className={`block size-3 rounded-full bg-white shadow-sm transition-transform ${
+                  normalization ? 'translate-x-3.5' : 'translate-x-0'
                 }`}
               />
             </button>
           </div>
         </div>
 
-        {/* Presets Bar */}
-        <div className="mt-5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-white/40 block mb-2">Presets</span>
-          <div className="flex flex-wrap gap-2">
-            {EQ_PRESETS.map((p) => {
-              const active = preset === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setPreset(p.id)}
-                  className={`h-7 px-3.5 rounded-[14px] text-xs font-medium transition-all inline-flex items-center justify-center ${
-                    active
-                      ? 'bg-white text-black font-semibold shadow-md shadow-white/10'
-                      : 'bg-white/[0.05] border border-white/5 text-white/75 hover:bg-white/[0.1] hover:text-white'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              );
-            })}
+        {/* Studio Graphic EQ Faders Grid */}
+        <div className="relative mt-4 rounded-2xl bg-black/45 p-4 border border-white/5 select-none">
+          {/* Y-Axis Guidelines & Scale */}
+          <div className="pointer-events-none absolute left-3 right-3 top-7 bottom-10 flex flex-col justify-between">
+            <div className="flex items-center w-full">
+              <span className="w-8 text-[9px] font-mono text-white/30">+12dB</span>
+              <div className="flex-1 border-b border-white/[0.06]" />
+            </div>
+            <div className="flex items-center w-full">
+              <span className="w-8 text-[9px] font-mono text-white/30">+6dB</span>
+              <div className="flex-1 border-b border-white/[0.04]" />
+            </div>
+            <div className="flex items-center w-full">
+              <span className="w-8 text-[9px] font-mono font-semibold text-white/50">0dB</span>
+              <div className="flex-1 border-b border-white/20" />
+            </div>
+            <div className="flex items-center w-full">
+              <span className="w-8 text-[9px] font-mono text-white/30">-6dB</span>
+              <div className="flex-1 border-b border-white/[0.04]" />
+            </div>
+            <div className="flex items-center w-full">
+              <span className="w-8 text-[9px] font-mono text-white/30">-12dB</span>
+              <div className="flex-1 border-b border-white/[0.06]" />
+            </div>
           </div>
-        </div>
 
-        {/* 10-Band Sliders Grid */}
-        <div className="relative mt-5 rounded-2xl bg-black/40 p-4 border border-white/5">
-          {/* Subtle 0 dB Center Reference Guideline */}
-          <div className="pointer-events-none absolute left-6 right-6 top-[50%] h-[1px] border-b border-dashed border-white/15 z-0" />
-          <span className="pointer-events-none absolute left-2 top-[47%] text-[9px] font-mono text-white/30 z-0">0dB</span>
-
-          <div className="relative z-1 flex items-end justify-between h-48 px-4 gap-2">
+          {/* 10 Vertical Fader Columns */}
+          <div className="relative z-1 flex items-stretch justify-between h-52 pl-9 pr-1 gap-1">
             {EQ_FREQUENCIES.map((freq, i) => {
               const gain = bands[i] ?? 0;
               const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
+              // Percentage from bottom (0 to 100%)
+              const fraction = (gain + 12) / 24;
+              const percent = fraction * 100;
+              const isZero = Math.abs(gain) < 0.1;
+
               return (
-                <div key={freq} className="flex flex-1 flex-col items-center h-full justify-between">
+                <div
+                  key={freq}
+                  className="flex flex-1 flex-col items-center justify-between h-full group"
+                >
                   {/* Gain readout */}
-                  <span className={`text-[10px] font-mono transition-colors ${gain !== 0 ? 'text-white font-semibold' : 'text-white/40'}`}>
+                  <span
+                    className={`text-[10px] font-mono h-4 flex items-center transition-colors ${
+                      !isZero && eqEnabled ? 'text-white font-semibold' : 'text-white/35'
+                    }`}
+                  >
                     {gain > 0 ? `+${gain}` : gain}
                   </span>
 
-                  {/* Vertical Slider Track Container */}
-                  <div className="relative flex-1 flex items-center justify-center my-1 w-full">
-                    <input
-                      type="range"
-                      min={-12}
-                      max={12}
-                      step={1}
-                      value={gain}
-                      disabled={!eqEnabled}
-                      onChange={(e) => setBandGain(i, parseFloat(e.target.value))}
-                      className="h-32 w-1.5 appearance-none bg-white/15 rounded-full cursor-pointer accent-white [writing-mode:vertical-lr] [direction:rtl] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/25 transition-colors"
-                      title={`${label}Hz: ${gain > 0 ? `+${gain}` : gain} dB`}
-                    />
+                  {/* Interactive Fader Track Area */}
+                  <div
+                    onPointerDown={(e) => handleFaderStart(i, e)}
+                    onDoubleClick={() => setBandGain(i, 0)}
+                    className="relative flex-1 w-full flex items-center justify-center cursor-pointer py-1"
+                    title={`${label}Hz: ${gain > 0 ? `+${gain}` : gain} dB (Double-click to reset)`}
+                  >
+                    {/* Background Slot */}
+                    <div className="relative h-full w-[4px] bg-white/10 rounded-full overflow-hidden">
+                      {/* Active level fill from center 0dB line */}
+                      {eqEnabled && (
+                        <div
+                          className="absolute left-0 right-0 bg-white/80 transition-all duration-75"
+                          style={
+                            gain >= 0
+                              ? {
+                                  bottom: '50%',
+                                  height: `${(gain / 12) * 50}%`,
+                                }
+                              : {
+                                  top: '50%',
+                                  height: `${(-gain / 12) * 50}%`,
+                                }
+                          }
+                        />
+                      )}
+                    </div>
+
+                    {/* Console-Style Fader Knob Handle */}
+                    <div
+                      className={`absolute left-1/2 -translate-x-1/2 w-6 h-3 rounded-[4px] shadow-lg border transition-all pointer-events-none flex items-center justify-center ${
+                        eqEnabled
+                          ? 'bg-white text-black border-white/40 shadow-black/60 group-hover:scale-110'
+                          : 'bg-white/40 border-white/20'
+                      }`}
+                      style={{
+                        bottom: `calc(${percent}% - 6px)`,
+                      }}
+                    >
+                      {/* Fader center grip notch line */}
+                      <div className="w-2.5 h-[1.5px] bg-black/60 rounded-full" />
+                    </div>
                   </div>
 
                   {/* Frequency label */}
-                  <span className="text-[10px] font-medium text-white/60 tracking-tight">{label}</span>
+                  <span className="text-[10px] font-medium text-white/50 group-hover:text-white transition-colors tracking-tight">
+                    {label}
+                  </span>
                 </div>
               );
             })}
@@ -170,14 +298,20 @@ export function EqualizerModal() {
         </div>
 
         {/* Footer */}
-        <div className="mt-5 flex items-center justify-between pt-1">
-          <button
-            onClick={resetEq}
-            className="flex items-center gap-1.5 rounded-[14px] px-3 py-1.5 text-xs text-white/50 hover:bg-white/5 hover:text-white transition-colors"
-          >
-            <RotateCcw size={13} />
-            <span>Reset to Flat</span>
-          </button>
+        <div className="mt-4 flex items-center justify-between pt-1">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={resetEq}
+              className="flex items-center gap-1.5 rounded-[12px] px-3 py-1.5 text-xs text-white/50 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              <RotateCcw size={13} />
+              <span>Reset</span>
+            </button>
+            <span className="text-[11px] text-white/30 hidden sm:inline">
+              Double-click any fader to zero
+            </span>
+          </div>
+
           <button
             onClick={() => setModalOpen(false)}
             className="rounded-[20px] h-8 px-6 bg-white text-xs font-semibold text-black hover:bg-white/90 active:scale-95 transition-all shadow-sm"
