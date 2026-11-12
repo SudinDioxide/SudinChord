@@ -91,6 +91,8 @@ interface PlayerState extends Settings {
   clearUpNext: () => void;
   next: () => void;
   previous: () => void;
+  play: () => void;
+  pause: () => void;
   togglePlay: () => void;
   seek: (seconds: number) => void;
   toggleShuffle: () => void;
@@ -605,28 +607,45 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     intent();
   },
 
-  togglePlay() {
-    // A loop mix holds both elements paused: settle it onto a playing song first.
+  play() {
     if (graph?.dj.loopMixing) cancelCrossfade();
     const audio = getAudio();
     const { nowPlaying, status, index } = get();
     if (!nowPlaying) return;
-    const resuming = !audio || audio.paused || status === 'error';
-    // A routed graph left suspended (no gesture when it was built) would play silence.
-    if (resuming) void graph?.ctx.resume();
-    // A listener in a party the host has locked: the press moves this device alone.
-    if (partyHooks?.onLockedTransport(resuming)) return;
+    if (status === 'playing' && audio && !audio.paused) return;
+    void graph?.ctx.resume();
+    if (partyHooks?.onLockedTransport(true)) return;
     if (!audio || !audio.src || audio.currentSrc === '' || status === 'error' || (audio.paused && audio.readyState === 0)) {
-      // A stopped, restored, or failed track starts again from where it was.
       void startAt(index, { startSec: audio?.currentTime ?? 0 });
     } else if (audio.paused) {
-      // In a party, a resume waits for the instant the server schedules for everyone.
       if (!partyHooks?.shouldDeferPlay()) void audio.play().catch((e: unknown) => trackLog.w(`play() refused: ${String(e)}`));
-    } else {
-      cancelCrossfade();
-      audio.pause();
     }
     intent();
+  },
+
+  pause() {
+    const audio = getAudio();
+    const { nowPlaying, status } = get();
+    if (!nowPlaying) return;
+    if (status === 'paused' || (audio && audio.paused)) return;
+    if (partyHooks?.onLockedTransport(false)) return;
+    cancelCrossfade();
+    if (audio && !audio.paused) {
+      audio.pause();
+    }
+    set({ status: 'paused' });
+    intent();
+  },
+
+  togglePlay() {
+    const audio = getAudio();
+    const { status } = get();
+    const isPlaying = status === 'playing' || (audio ? !audio.paused : false);
+    if (isPlaying) {
+      get().pause();
+    } else {
+      get().play();
+    }
   },
 
   seek(seconds) {
@@ -1164,9 +1183,8 @@ function updateMediaSession(track: NowPlaying | null) {
   const player = () => usePlayer.getState();
   // Through the store, so a party hears about them like any other press.
   // A loop mix holds the elements paused while it plays: that's playing, for the keys.
-  const sounding = () => graph?.dj.loopMixing || getAudio()?.paused === false;
-  handle('play', () => !sounding() && player().togglePlay());
-  handle('pause', () => sounding() && player().togglePlay());
+  handle('play', () => player().play());
+  handle('pause', () => player().pause());
   handle('seekto', (details) => {
     if (details.seekTime !== undefined) player().seek(details.seekTime);
   });

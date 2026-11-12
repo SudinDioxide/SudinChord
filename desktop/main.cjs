@@ -1023,7 +1023,7 @@ function updateTaskbarThumbnailToolbar(state) {
       {
         tooltip: isPlaying ? 'Pause (Ctrl+Alt+Space)' : 'Play (Ctrl+Alt+Space)',
         icon: isPlaying ? pauseIcon : playIcon,
-        click: () => mainWindow?.webContents.send('media:command', 'togglePlay'),
+        click: () => mainWindow?.webContents.send('media:command', isPlaying ? 'pause' : 'play'),
       },
       {
         tooltip: 'Next Track (Ctrl+Alt+Right)',

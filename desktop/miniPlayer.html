@@ -960,7 +960,7 @@
     });
 
     document.getElementById('btnPlay').addEventListener('click', () => {
-      ipcRenderer.send('miniplayer:command', 'togglePlay');
+      ipcRenderer.send('miniplayer:command', isPlaying ? 'pause' : 'play');
     });
 
     document.getElementById('btnPrev').addEventListener('click', () => {

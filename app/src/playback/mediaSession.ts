@@ -113,10 +113,10 @@ export function useMediaSession(): void {
             player.togglePlay();
             break;
           case 'play':
-            if (player.status !== 'playing') player.togglePlay();
+            player.play();
             break;
           case 'pause':
-            if (player.status === 'playing') player.togglePlay();
+            player.pause();
             break;
           case 'next':
             player.next();
@@ -146,8 +146,8 @@ export function useMediaSession(): void {
     // 2. Setup standard Web MediaSession API (Controls SMTC in Chromium/Windows 11)
     if ('mediaSession' in navigator) {
       const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-        ['play', () => usePlayer.getState().togglePlay()],
-        ['pause', () => usePlayer.getState().togglePlay()],
+        ['play', () => usePlayer.getState().play()],
+        ['pause', () => usePlayer.getState().pause()],
         ['previoustrack', () => usePlayer.getState().previous()],
         ['nexttrack', () => usePlayer.getState().next()],
         [
