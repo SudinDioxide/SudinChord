@@ -428,9 +428,9 @@ export function FullScreenPlayer() {
         className={
           theater
             ? `absolute inset-x-0 bottom-0 flex justify-center bg-[linear-gradient(to_top,rgb(0_0_0/0.72),rgb(0_0_0/0.35)_55%,transparent)] px-6 pt-32 pb-16 transition-opacity duration-300${hidden}`
-            : `grid h-full items-center justify-center gap-x-[clamp(48px,7vw,144px)] px-[clamp(24px,9vw,144px)] py-16 max-md:px-6 max-md:pb-18 ${
+            : `grid h-full items-center justify-center gap-x-[clamp(32px,5vw,96px)] px-[clamp(20px,5vw,80px)] py-16 max-md:px-6 max-md:pb-18 ${
                 column
-                  ? 'grid-cols-[var(--art)_minmax(0,38vw)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[minmax(0,1fr)_auto] max-md:items-stretch max-md:gap-y-4'
+                  ? 'grid-cols-[var(--art)_minmax(0,48vw)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[minmax(0,1fr)_auto] max-md:items-stretch max-md:gap-y-4'
                   : 'grid-cols-[var(--art)]'
               }`
         }
@@ -509,7 +509,7 @@ export function FullScreenPlayer() {
         </section>
 
         {showLyrics && (
-          <section className="flex min-h-0 animate-fade-in self-stretch" aria-label="Lyrics">
+          <section className="flex min-h-0 min-w-0 animate-fade-in self-stretch overflow-visible" aria-label="Lyrics">
             <LyricsPanel variant="full" />
           </section>
         )}

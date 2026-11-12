@@ -1,6 +1,6 @@
 {
   "name": "@bitchord/desktop",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "private": true,
   "description": "SudinChord Desktop for Windows 11",
   "main": "main.cjs",
