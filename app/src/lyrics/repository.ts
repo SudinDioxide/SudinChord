@@ -4,6 +4,7 @@ import type { Parsed } from './parse';
 import * as providers from './providers';
 import { enabledSources, useLyricsSettings } from './settings';
 import { artistForLyricsSearch, forLyricsSearch, sourceById, type LyricsSourceId } from './sources';
+import { autoTranslateLyrics } from './translate';
 import { writeTtml } from './ttml';
 
 /**
@@ -179,7 +180,16 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
   // Rule: "If only got one lyric api, stay on that"
   if (sequence.length === 1) {
-    const single = await run(sequence[0]!);
+    let single = await run(sequence[0]!);
+    if (single && single.lines.length) {
+      const current = single;
+      const translated = await autoTranslateLyrics(current.lines).catch(() => current.lines);
+      single = {
+        ...current,
+        lines: translated,
+        ttml: writeTtml(translated),
+      };
+    }
     cache.set(key, { at: Date.now(), result: single });
     return single;
   }
@@ -197,16 +207,17 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
   let bestRichSynced: LyricsResult | null = null; // Synced + (Romanized or Translated)
   let bestWordSynced: LyricsResult | null = null; // Syllable/word synced
-  let bestLineSynced: LyricsResult | null = null; // Line synced
+  let firstSynced: LyricsResult | null = null; // First synced in priority order
   const plainCandidates: LyricsResult[] = []; // Plain lyrics for random fallback
 
   for (const source of sequence) {
-    if (source === 'genius' && (bestRichSynced || bestWordSynced || bestLineSynced)) continue;
+    if (source === 'genius' && (bestRichSynced || bestWordSynced || firstSynced)) continue;
 
     const found = await run(source);
     if (!found) continue;
 
     if (found.synced) {
+      if (!firstSynced) firstSynced = found;
       // 1. Highest priority: choose lyric that got romanize and translation
       if (hasRomanOrTrans(found)) {
         bestRichSynced = found;
@@ -215,8 +226,7 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
       if (found.wordSynced && !bestWordSynced) {
         bestWordSynced = found;
-      } else if (!bestLineSynced) {
-        bestLineSynced = found;
+        if (preferSyllables) break;
       }
     } else {
       plainCandidates.push(found);
@@ -225,16 +235,26 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
   // Winner selection hierarchy:
   // 1. Synced with romanization and/or translation
-  // 2. Word-synced or line-synced lyrics
+  // 2. Word-synced (if preferSyllables) or first synced in priority order
   // 3. Random choice among plain lyric providers
   let winner: LyricsResult | null =
     bestRichSynced ??
-    (preferSyllables ? (bestWordSynced ?? bestLineSynced) : (bestWordSynced ?? bestLineSynced));
+    (preferSyllables ? (bestWordSynced ?? firstSynced) : firstSynced);
 
   if (!winner && plainCandidates.length > 0) {
     // "if not, choose random lyric api that got plain lyric"
     const randomIndex = Math.floor(Math.random() * plainCandidates.length);
     winner = plainCandidates[randomIndex] ?? plainCandidates[0]!;
+  }
+
+  if (winner && winner.lines.length) {
+    const current = winner;
+    const translated = await autoTranslateLyrics(current.lines).catch(() => current.lines);
+    winner = {
+      ...current,
+      lines: translated,
+      ttml: writeTtml(translated),
+    };
   }
 
   cache.set(key, { at: Date.now(), result: winner });

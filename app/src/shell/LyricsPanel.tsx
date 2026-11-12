@@ -168,7 +168,12 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (element.current && element.current.ttml !== ttml) element.current.ttml = ttml;
+    if (element.current && element.current.ttml !== ttml) {
+      element.current.ttml = ttml;
+      element.current.showTranslation = true;
+      element.current.showRomanization = true;
+      (element.current as any).requestUpdate?.();
+    }
   }, [ttml]);
 
   useEffect(() => {

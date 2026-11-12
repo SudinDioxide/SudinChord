@@ -94,10 +94,12 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
         const isLrc = /\[\d{1,2}:\d{2}[.:]\d{2,3}\]/.test(media.lyrics);
         const parsedLines = isLrc ? parseLrc(media.lyrics) : plainLines(media.lyrics);
         if (parsedLines.length) {
+          const { autoTranslateLyrics } = await import('@/lyrics/translate');
+          const translatedLines = await autoTranslateLyrics(parsedLines).catch(() => parsedLines);
           ep.sendLyrics({
             videoId: nowPlaying.videoId,
-            synced: parsedLines.some((l) => l.timeMs > 0),
-            lines: parsedLines.map((l) => ({
+            synced: translatedLines.some((l) => l.timeMs > 0),
+            lines: translatedLines.map((l) => ({
               timeMs: l.timeMs,
               text: l.text,
               romanized: getLineRomanized(l.text, l.romanized),
