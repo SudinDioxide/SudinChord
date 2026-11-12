@@ -1,5 +1,24 @@
 // Registers <am-lyrics>.
 import '@uimaxbai/am-lyrics/am-lyrics.js';
+
+// Patch AmLyrics to prevent character-level splitting on Indic/Brahmic scripts and texts with combining marks (Tamil, Devanagari, Telugu, etc.)
+// Breaking combining vowel signs (like Tamil ா, ே) into separate <span> elements causes the font renderer to show dotted circles (◌).
+if (typeof customElements !== 'undefined') {
+  const AmLyricsClass = customElements.get('am-lyrics') as any;
+  if (AmLyricsClass && typeof AmLyricsClass.characterMotionMode === 'function') {
+    const originalMode = AmLyricsClass.characterMotionMode;
+    AmLyricsClass.characterMotionMode = function (text: string, durationMs: number, background = false) {
+      if (
+        /[\u0900-\u0d7f\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u1780-\u17ff]/.test(text) ||
+        /\p{M}/u.test(text)
+      ) {
+        return 'none';
+      }
+      return originalMode.call(this, text, durationMs, background);
+    };
+  }
+}
+
 import { Check, ChevronDown, Loader2, Minus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useCanvas } from '@/data/spotify/canvas';
@@ -35,8 +54,8 @@ type AmLyricsElement = HTMLElement & {
  */
 const HIDE_FOOTER = '.lyrics-footer { visibility: hidden !important; pointer-events: none !important; }';
 
-/** The phone's lyric typeface (@font-face in styles/global.css), then the app's. */
-const LYRIC_FONT = "'BitChord SF Pro Display', 'DM Sans', system-ui, sans-serif";
+/** The phone's lyric typeface (@font-face in styles/global.css), with native Tamil / Indic fallback. */
+const LYRIC_FONT = "'BitChord SF Pro Display', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Nirmala UI', 'Latha', 'Vijaya', system-ui, sans-serif";
 
 let lyricFont: Promise<void> | null = null;
 let lyricFontLoaded = false;
@@ -49,7 +68,10 @@ let lyricFontLoaded = false;
  */
 function loadLyricFont(): Promise<void> {
   lyricFont ??= Promise.race([
-    Promise.all([document.fonts.load(`700 28px ${LYRIC_FONT}`), document.fonts.load(`400 28px ${LYRIC_FONT}`)]),
+    Promise.all([
+      document.fonts.load('700 28px "BitChord SF Pro Display"'),
+      document.fonts.load('400 28px "BitChord SF Pro Display"'),
+    ]),
     new Promise((resolve) => setTimeout(resolve, 1500)),
   ])
     .catch(() => undefined)
