@@ -1,9 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { SpotifyTrack } from '@bitchord/shared/bridge';
 import type { Track } from '@/data/music/types';
+import { queryClient } from '@/lib/queryClient';
 import { useSpotifyAuth, useSpotifySignedIn } from '@/extension/useSpotifyAuth';
-import { fetchSpotifyPlaylistInfo, fetchSpotifyPlaylists, fetchSpotifyTracks, matchToYouTube, pendingTrack } from './api';
+import {
+  addToSpotifyPlaylist,
+  createSpotifyPlaylist,
+  fetchSpotifyPlaylistInfo,
+  fetchSpotifyPlaylists,
+  fetchSpotifyTracks,
+  matchToYouTube,
+  pendingTrack,
+} from './api';
 
 export function useSpotifyPlaylists() {
   const signedIn = useSpotifySignedIn();
@@ -22,6 +31,27 @@ export function useSpotifyPlaylistInfo(playlistId: string) {
     queryFn: () => fetchSpotifyPlaylistInfo(playlistId),
     enabled: signedIn && !!playlistId,
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateSpotifyPlaylist() {
+  return useMutation({
+    mutationFn: ({ name, description, isPublic }: { name: string; description?: string; isPublic?: boolean }) =>
+      createSpotifyPlaylist(name, description, isPublic),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['spotify', 'data', 'playlists'] });
+    },
+  });
+}
+
+export function useAddToSpotifyPlaylist() {
+  return useMutation({
+    mutationFn: ({ playlistId, uris }: { playlistId: string; uris: string[] }) =>
+      addToSpotifyPlaylist(playlistId, uris),
+    onSuccess: (_data, { playlistId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['spotify', 'data', 'playlist', playlistId] });
+      void queryClient.invalidateQueries({ queryKey: ['spotify', 'data', 'playlists'] });
+    },
   });
 }
 

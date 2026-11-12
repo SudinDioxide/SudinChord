@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { PauseIcon, PlayIcon } from '@/components/icons/Transport';
 import type { ArtistRef, Track } from '@/data/music/types';
@@ -27,6 +28,8 @@ interface TrackListProps {
   onNearEnd?: () => void;
   /** Where the list comes from: playing a row queues the list from there. Without it, a row plays alone. */
   source?: ListContext['source'];
+  /** Called to remove a track from a playlist. */
+  onRemoveTrack?: (index: number, track: Track) => void;
 }
 
 /* Track lists (report §3 album rows, §14 playlist rows). */
@@ -90,9 +93,10 @@ interface RowProps {
   position: number;
   fallbackArtwork: string | null | undefined;
   onPlayRow: () => void;
+  onRemoveTrack?: () => void;
 }
 
-function Row({ track, variant, position, fallbackArtwork, onPlayRow }: RowProps) {
+function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTrack }: RowProps) {
   const current = usePlayer((s) => s.nowPlaying?.videoId === track.videoId);
   const playing = usePlayer((s) => s.nowPlaying?.videoId === track.videoId && (s.status === 'playing' || s.status === 'buffering'));
   const togglePlay = usePlayer((s) => s.togglePlay);
@@ -191,10 +195,27 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow }: RowProps)
           {unavailable === 'missing' ? 'Not found' : formatDuration(track.durationSec)}
         </span>
         {!unavailable && (
-          <TrackMenu
-            track={track}
-            className="absolute end-2.5 hidden size-7 place-items-center rounded-full text-key group-focus-within/row:grid group-hover/row:grid hover:bg-quinary data-open:grid"
-          />
+          <div className="absolute end-2.5 hidden items-center gap-1 group-focus-within/row:flex group-hover/row:flex group-has-[[data-open]]/row:flex">
+            {onRemoveTrack && (
+              <button
+                type="button"
+                className="grid size-7 place-items-center rounded-full text-secondary hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+                title="Remove from playlist"
+                aria-label={`Remove ${track.title} from playlist`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveTrack();
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            <TrackMenu
+              track={track}
+              className="grid size-7 place-items-center rounded-full text-key hover:bg-quinary cursor-pointer data-open:grid"
+              onRemoveFromPlaylist={onRemoveTrack}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -217,7 +238,7 @@ function Header() {
  * hover fill, the number (or artwork) turning into a play button. Long lists
  * are virtualized against the page's scroll container (prompt §3).
  */
-export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source }: TrackListProps) {
+export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source, onRemoveTrack }: TrackListProps) {
   const playRow = (i: number) => {
     // Rows from another catalogue that found no YouTube Music song stay out of the queue.
     if (source) {
@@ -270,6 +291,7 @@ export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, o
                   position={item.index + 1}
                   fallbackArtwork={fallbackArtwork}
                   onPlayRow={() => playRow(item.index)}
+                  onRemoveTrack={onRemoveTrack ? () => onRemoveTrack(item.index, tracks[item.index]!) : undefined}
                 />
               </div>
             ))}
@@ -283,6 +305,7 @@ export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, o
               position={i + 1}
               fallbackArtwork={fallbackArtwork}
               onPlayRow={() => playRow(i)}
+              onRemoveTrack={onRemoveTrack ? () => onRemoveTrack(i, track) : undefined}
             />
           ))
         )}

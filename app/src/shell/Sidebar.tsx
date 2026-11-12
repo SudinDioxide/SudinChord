@@ -1,4 +1,5 @@
-import { ListMusic, Settings } from 'lucide-react';
+import { ListMusic, Plus, Settings, Trash2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
 import { MdOutlineExtension } from 'react-icons/md';
 import { PrefetchLink, PrefetchNavLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
@@ -18,10 +19,12 @@ import {
 import { hrefFor } from '@/components/music/links';
 import { config } from '@/config';
 import { LIBRARY_SECTIONS, type LibrarySection } from '@/data/music/library';
-import { useLibraryPlaylists, useSignedIn } from '@/data/music/queries';
+import { useDeleteYouTubePlaylist, useLibraryPlaylists, useSignedIn } from '@/data/music/queries';
 import { useSpotifyPlaylists } from '@/data/spotify/queries';
 import { useExtensionUpdate } from '@/extension/useExtensionUpdate';
 import { useSpotifySignedIn } from '@/extension/useSpotifyAuth';
+import { localPlaylists, useLocalPlaylists } from '@/playback/local/localPlaylists';
+import { useNewPlaylistModal } from '@/state/newPlaylistModal';
 import { useUi } from '@/state/ui';
 import { AccountButton } from './AccountButton';
 
@@ -77,29 +80,51 @@ function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate: () => vo
   );
 }
 
-/** Library and Playlists (report §1), once YouTube requests are made as the user. */
-function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
-  const playlists = useLibraryPlaylists();
+function LocalPlaylistNav({ onNavigate }: { onNavigate: () => void }) {
+  const playlists = useLocalPlaylists();
+  const openNew = useNewPlaylistModal((s) => s.open);
+  const location = useLocation();
+  const navigate = useNavigate();
+
   return (
     <>
-      <h2 className={sectionHeader}>Library</h2>
-      <NavList items={LIBRARY} onNavigate={onNavigate} />
-      <h2 className={sectionHeader}>Playlists</h2>
+      <div className="flex items-center justify-between pr-3 pt-3">
+        <h2 className={sectionHeader}>Local Playlists</h2>
+        <button
+          type="button"
+          className="p-1 rounded-md text-secondary hover:text-primary hover:bg-white/10 transition-colors cursor-pointer"
+          title="Create New Playlist"
+          onClick={() => openNew({ defaultPlatform: 'local' })}
+        >
+          <Plus size={15} />
+        </button>
+      </div>
       <ul className={list}>
-        <li>
-          <PrefetchNavLink to="/library/playlists" className={item} onClick={onNavigate}>
-            <AllPlaylistsIcon size={24} className={icon} />
-            <span className={navLabel}>{LIBRARY_SECTIONS.playlists.title}</span>
-          </PrefetchNavLink>
-        </li>
-        {playlists.data?.map((playlist) => (
-          <li key={playlist.id}>
-            <PrefetchNavLink to={hrefFor(playlist) ?? '/library/playlists'} className={item} onClick={onNavigate}>
+        {playlists.map((playlist) => (
+          <li key={playlist.id} className="group/item relative flex items-center">
+            <PrefetchNavLink to={`/playlist/${encodeURIComponent(playlist.id)}`} className={`${item} flex-1 pr-8`} onClick={onNavigate}>
               <span className={icon}>
                 <ListMusic size={17} strokeWidth={1.8} />
               </span>
-              <span className={navLabel}>{playlist.title}</span>
+              <span className={navLabel}>{playlist.name}</span>
             </PrefetchNavLink>
+            <button
+              type="button"
+              className="absolute right-1 opacity-0 group-hover/item:opacity-100 p-1.5 rounded-md text-secondary hover:text-red-400 hover:bg-white/10 transition-all cursor-pointer"
+              title={`Delete "${playlist.name}"`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.confirm(`Delete playlist "${playlist.name}"?`)) {
+                  localPlaylists.delete(playlist.id);
+                  if (location.pathname.includes(encodeURIComponent(playlist.id))) {
+                    navigate('/home');
+                  }
+                }
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
           </li>
         ))}
       </ul>
@@ -107,7 +132,73 @@ function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+/** Library and Playlists (report §1), once YouTube requests are made as the user. */
+function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
+  const playlists = useLibraryPlaylists();
+  const openNew = useNewPlaylistModal((s) => s.open);
+  const deleteMutation = useDeleteYouTubePlaylist();
+  const location = useLocation();
+  const navigate = useNavigate();
 
+  return (
+    <>
+      <h2 className={sectionHeader}>Library</h2>
+      <NavList items={LIBRARY} onNavigate={onNavigate} />
+      <div className="flex items-center justify-between pr-3 pt-3">
+        <h2 className={sectionHeader}>YouTube Playlists</h2>
+        <button
+          type="button"
+          className="p-1 rounded-md text-secondary hover:text-primary hover:bg-white/10 transition-colors cursor-pointer"
+          title="Create YouTube Playlist"
+          onClick={() => openNew({ defaultPlatform: 'youtube' })}
+        >
+          <Plus size={15} />
+        </button>
+      </div>
+      <ul className={list}>
+        <li>
+          <PrefetchNavLink to="/library/playlists" className={item} onClick={onNavigate}>
+            <AllPlaylistsIcon size={24} className={icon} />
+            <span className={navLabel}>{LIBRARY_SECTIONS.playlists.title}</span>
+          </PrefetchNavLink>
+        </li>
+        {playlists.data?.map((playlist) => {
+          const href = hrefFor(playlist) ?? '/library/playlists';
+          return (
+            <li key={playlist.id} className="group/item relative flex items-center">
+              <PrefetchNavLink to={href} className={`${item} flex-1 pr-8`} onClick={onNavigate}>
+                <span className={icon}>
+                  <ListMusic size={17} strokeWidth={1.8} />
+                </span>
+                <span className={navLabel}>{playlist.title}</span>
+              </PrefetchNavLink>
+              <button
+                type="button"
+                className="absolute right-1 opacity-0 group-hover/item:opacity-100 p-1.5 rounded-md text-secondary hover:text-red-400 hover:bg-white/10 transition-all cursor-pointer"
+                title={`Delete "${playlist.title}"`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (window.confirm(`Delete playlist "${playlist.title}" from YouTube?`)) {
+                    deleteMutation.mutate(playlist.id, {
+                      onSuccess: () => {
+                        if (location.pathname.includes(encodeURIComponent(playlist.id))) {
+                          navigate('/library/playlists');
+                        }
+                      },
+                    });
+                  }
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
 
 /** Spotify's playlists, once the extension can read them as the user (prompt §7.1). */
 function SpotifyNav({ onNavigate }: { onNavigate: () => void }) {
@@ -163,6 +254,7 @@ export function Sidebar() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-3 pl-5 [scrollbar-width:none]">
           <NavList items={PRIMARY} onNavigate={close} />
+          <LocalPlaylistNav onNavigate={close} />
           {signedIn && <LibraryNav onNavigate={close} />}
           {spotifySignedIn && <SpotifyNav onNavigate={close} />}
         </div>

@@ -77,6 +77,17 @@ const FAR_LINES =
   '.lyrics-line:not(.active):not(.pre-active):not(.lyrics-activest):not(.post-active-line):not(.next-active-line)' +
   ':not(.prev-2):not(.prev-3):not(.next-2):not(.next-3):not(.lyrics-gap) { opacity: 0.46; }';
 
+const ACTIVE_SPRING =
+  ' .lyrics-line.active, .lyrics-line.lyrics-activest {' +
+  ' transform: scale(1.025);' +
+  ' transform-origin: left center;' +
+  ' transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.3s ease !important;' +
+  ' text-shadow: 0 0 24px rgba(255, 255, 255, 0.45), 0 0 45px rgba(255, 255, 255, 0.2);' +
+  ' }' +
+  ' .lyrics-line:not(.active):not(.lyrics-activest) {' +
+  ' transition: transform 0.4s ease, opacity 0.4s ease !important;' +
+  ' }';
+
 /**
  * The full-screen player's sizing (report §7): its line size, set on the host
  * by breakpoint, replaces all three of am-lyrics' container tiers, and the
@@ -129,7 +140,7 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
       const root = el.shadowRoot;
       if (!root) return;
       const sheet = new CSSStyleSheet();
-      sheet.replaceSync(HIDE_FOOTER + FAR_LINES + FULL_SIZE);
+      sheet.replaceSync(HIDE_FOOTER + FAR_LINES + FULL_SIZE + ACTIVE_SPRING);
       root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
       // The full-screen column fades its top edge, but am-lyrics' toolbar
       // (romanize, translate, download) sits at the top of the same scroller

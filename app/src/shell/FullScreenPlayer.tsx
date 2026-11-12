@@ -1,4 +1,4 @@
-import { Maximize, Minimize, X } from 'lucide-react';
+import { Maximize, Minimize, PictureInPicture2, X } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
 import {
@@ -13,14 +13,18 @@ import {
   ShuffleIcon,
   UpNextIcon,
 } from '@/components/icons/Transport';
+import { AudioVisualizer } from '@/components/music/AudioVisualizer';
+import { SleepTimerButton } from '@/components/music/SleepTimerButton';
+import { VisualizerButton } from '@/components/music/VisualizerButton';
 import { ExplicitBadge } from '@/components/music/ExplicitBadge';
 import { FavoriteButton } from '@/components/music/FavoriteButton';
 import { TrackMenu } from '@/components/music/TrackMenu';
 import { albumHref } from '@/components/music/links';
 import { MotionArtwork } from '@/components/music/MotionArtwork';
 import { VideoSurface } from '@/components/music/VideoSurface';
-import { useTrackMotion } from '@/data/apple/motionArt';
+import { useTrackMotion, type AppleMotion } from '@/data/apple/motionArt';
 import { sizedArtwork } from '@/lib/artwork';
+import { useArtworkAccent, type ArtworkAccent } from '@/lib/artworkAccent';
 import { usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
 import { useHasVideo, useVideo } from '@/state/video';
@@ -44,21 +48,25 @@ function useBrowserFullScreen(): boolean {
   return useSyncExternalStore(subscribeFullscreen, getFullscreenSnapshot);
 }
 
-/** The seek line under the track's names: thicker on hover, with the times beneath its ends. */
-function Scrubber() {
+/** The seek line under the track's names: thicker on hover, with glowing dynamic artwork accent. */
+function Scrubber({ accent }: { accent: ArtworkAccent }) {
   const { bar, elapsed, remaining, mixLabel, dragging, handlers } = useScrubber();
   return (
     <div className="group/scrub mt-3.5" data-dragging={dragging || undefined}>
       {/* A taller hit area than the line it carries. */}
       <div className="group/hit flex h-4 cursor-pointer touch-none items-center" {...handlers}>
         <div
-          className="relative h-1 flex-1 overflow-hidden rounded-[999px] bg-quaternary transition-[height] duration-120 ease-in group-hover/hit:h-2 group-data-dragging/scrub:h-2"
+          className="relative h-1 flex-1 overflow-hidden rounded-[999px] bg-white/10 transition-[height] duration-120 ease-in group-hover/hit:h-2 group-data-dragging/scrub:h-2"
           aria-hidden="true"
         >
           <MixWindowHighlight />
           <div
             ref={bar}
-            className="relative size-full origin-left scale-x-(--progress) bg-secondary transition-[background-color] duration-120 ease-in [--progress:0] group-hover/hit:bg-primary group-data-dragging/scrub:bg-primary"
+            style={{
+              background: `linear-gradient(90deg, ${accent.secondary}, ${accent.primary})`,
+              boxShadow: `0 0 12px ${accent.glow}`,
+            }}
+            className="relative size-full origin-left scale-x-(--progress) transition-opacity duration-120 ease-in [--progress:0]"
           />
         </div>
       </div>
@@ -69,6 +77,134 @@ function Scrubber() {
         </span>
         <span ref={remaining} />
       </div>
+    </div>
+  );
+}
+
+/** 3D interactive stage with dynamic radiosity ambient halo, floor reflection, and cursor parallax tilt. */
+function ArtworkStage({
+  artworkUrl,
+  playing,
+  video,
+  column,
+  theater,
+  motion,
+  accent,
+}: {
+  artworkUrl: string | null;
+  playing: boolean;
+  video: boolean;
+  column: boolean;
+  theater: boolean;
+  motion: AppleMotion | null;
+  accent: ArtworkAccent;
+}) {
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, glareX: 50, glareY: 50, hovered: false });
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (video) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const rx = -(y - 0.5) * 12;
+    const ry = (x - 0.5) * 12;
+    setTilt({ rx, ry, glareX: x * 100, glareY: y * 100, hovered: true });
+  };
+
+  const handlePointerLeave = () => {
+    setTilt((prev) => ({ ...prev, rx: 0, ry: 0, hovered: false }));
+  };
+
+  return (
+    <div
+      className={`relative w-(--art) rounded-[14px] transition-transform duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none ${
+        video ? ' aspect-video overflow-hidden bg-black' : ' aspect-square'
+      }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      style={{ perspective: 900 }}
+    >
+      {/* 3D Container with tilt */}
+      <div
+        className="relative size-full rounded-[inherit] transition-transform duration-200 ease-out"
+        style={{
+          transform: !video && tilt.hovered ? `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) scale3d(1.02, 1.02, 1.02)` : 'rotateX(0deg) rotateY(0deg)',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {artworkUrl && (
+          <>
+            {/* Deep Ambient Radiosity Glow */}
+            <img
+              key={`deep-glow-${artworkUrl}`}
+              className={`${artworkLayer} -z-2 translate-y-4 scale-102 blur-[48px] saturate-[2.4] data-loaded:opacity-75`}
+              src={sizedArtwork(artworkUrl, 80)}
+              alt=""
+              referrerPolicy="no-referrer"
+              decoding="async"
+              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+            />
+
+            {/* Core Glow */}
+            <img
+              key={`core-glow-${artworkUrl}`}
+              className={`${artworkLayer} -z-1 translate-y-2 scale-98 blur-[18px] saturate-200 data-loaded:opacity-50`}
+              src={sizedArtwork(artworkUrl, 120)}
+              alt=""
+              referrerPolicy="no-referrer"
+              decoding="async"
+              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+            />
+
+            {/* Main Cover Artwork */}
+            <img
+              key={artworkUrl}
+              className={`${artworkLayer} bg-[#ffffff12] shadow-[0_16px_40px_rgba(0,0,0,0.45)] data-loaded:opacity-100`}
+              style={{
+                boxShadow: `0 18px 45px rgba(0,0,0,0.45), 0 0 45px ${accent.glow}`,
+              }}
+              src={sizedArtwork(artworkUrl, 600)}
+              alt=""
+              referrerPolicy="no-referrer"
+              decoding="async"
+              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+            />
+
+            {/* Specular Interactive Glass Shine on Hover */}
+            {!video && tilt.hovered && (
+              <div
+                className="pointer-events-none absolute inset-0 z-1 size-full rounded-[inherit] transition-opacity duration-300"
+                style={{
+                  background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.22) 0%, transparent 65%)`,
+                }}
+              />
+            )}
+          </>
+        )}
+
+        {/* Apple Motion Artwork */}
+        {motion && (
+          <MotionArtwork
+            key={motion.url}
+            motion={motion}
+            className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
+            playing={playing}
+          />
+        )}
+        {video && !theater && <VideoSurface className="absolute inset-0" />}
+      </div>
+
+      {/* Radiant Sound Aura beneath artwork */}
+      {!video && artworkUrl && (
+        <div
+          className="pointer-events-none absolute -bottom-1 inset-x-8 h-2 rounded-full blur-md transition-opacity duration-300"
+          style={{
+            background: accent.primary,
+            boxShadow: `0 0 16px ${accent.glow}`,
+            opacity: playing ? 0.85 : 0.25,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -146,6 +282,7 @@ export function FullScreenPlayer() {
   const { pathname } = useLocation();
   const openedAt = useRef(pathname);
   const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const accent = useArtworkAccent(nowPlaying?.artworkUrl);
   const setFullScreen = useUi((s) => s.setFullScreen);
   const video = useHasVideo(nowPlaying?.videoId);
   // The right-hand column: the lyrics, Up Next, or nothing. Lyrics toggle bottom left, Up Next bottom right.
@@ -252,22 +389,39 @@ export function FullScreenPlayer() {
         </div>
       )}
 
-      <button ref={close} className={`${corner} top-4 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
+      <button ref={close} className={`${corner} top-12 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
         <X size={20} />
       </button>
-      {/* The music video's quality, just inside the full-screen button. */}
-      {video && (
-        <VideoQuality className={`absolute top-[18px] z-1${hidden}${document.fullscreenEnabled ? ' right-15' : ' right-5'}`} />
-      )}
-      {document.fullscreenEnabled && (
+      {/* Top right actions: Video quality, Visualizer, Sleep Timer, PiP, Fullscreen */}
+      <div className={`absolute top-12 right-5 z-1 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}>
+        {video && <VideoQuality />}
+        <VisualizerButton className={chromeButton} placement="below-end" />
+        <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
-          className={`${corner} top-4 right-5`}
-          aria-label={browserFullScreen ? 'Exit full screen' : 'Enter full screen'}
-          onClick={toggleBrowserFullScreen}
+          className={chromeButton}
+          aria-label="Mini Player (Picture-in-Picture)"
+          title="Mini Player (Ctrl+Alt+M)"
+          onClick={() => {
+            const ep = (window as unknown as {
+              electronPlatform?: {
+                toggleMiniPlayer?: (opts?: { minimizeMain?: boolean }) => void;
+              };
+            }).electronPlatform;
+            ep?.toggleMiniPlayer?.({ minimizeMain: true });
+          }}
         >
-          {browserFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
+          <PictureInPicture2 size={18} strokeWidth={2.2} />
         </button>
-      )}
+        {document.fullscreenEnabled && (
+          <button
+            className={chromeButton}
+            aria-label={browserFullScreen ? 'Exit full screen' : 'Enter full screen'}
+            onClick={toggleBrowserFullScreen}
+          >
+            {browserFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
+        )}
+      </div>
 
       {/* Apple's grid areas "controls lyrics": the artwork column, then the lyrics. */}
       <div
@@ -288,46 +442,16 @@ export function FullScreenPlayer() {
           }
           aria-label="Player"
         >
-          {/* Shrinks a touch while paused, as Apple's does. Beside a column, a music video plays here at 16:9. */}
-          <div
-            className={`relative w-(--art) rounded-[10px] transition-[scale] duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none${
-              video ? ' aspect-video overflow-hidden bg-black' : ' aspect-square'
-            }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
-          >
-            {nowPlaying.artworkUrl && (
-              <>
-                <img
-                  key={`glow-${nowPlaying.artworkUrl}`}
-                  // The radiosity glow: a small copy, blurred and saturated, behind the artwork.
-                  className={`${artworkLayer} -z-1 translate-y-2 scale-96 blur-[20px] saturate-200 data-loaded:opacity-40`}
-                  src={sizedArtwork(nowPlaying.artworkUrl, 60)}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-                />
-                <img
-                  key={nowPlaying.artworkUrl}
-                  className={`${artworkLayer} bg-[#ffffff12] shadow-[0_4px_10px_#0000001a] data-loaded:opacity-100`}
-                  src={sizedArtwork(nowPlaying.artworkUrl, 600)}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-                />
-              </>
-            )}
-            {/* Apple's motion artwork, over the cover once it's playing. */}
-            {motion && (
-              <MotionArtwork
-                key={motion.url}
-                motion={motion}
-                className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
-                playing={playing}
-              />
-            )}
-            {video && !theater && <VideoSurface className="absolute inset-0" />}
-          </div>
+          {/* 3D Interactive Artwork Stage with ambient glow and floor reflection */}
+          <ArtworkStage
+            artworkUrl={nowPlaying.artworkUrl}
+            playing={playing}
+            video={video}
+            column={column}
+            theater={theater}
+            motion={motion}
+            accent={accent}
+          />
 
           <div className={`flex items-center gap-3${theater ? '' : ' mt-[clamp(20px,3.2vh,32px)]'}${column ? ' max-md:mt-0' : ''}`}>
             {/* As the mini player's: the title opens the album, each credited name its artist. */}
@@ -379,8 +503,9 @@ export function FullScreenPlayer() {
             )}
           </div>
 
-          <Scrubber />
+          <Scrubber accent={accent} />
           <Transport />
+          <AudioVisualizer className="mt-4 w-full rounded-[10px]" height={44} barCount={40} />
         </section>
 
         {showLyrics && (

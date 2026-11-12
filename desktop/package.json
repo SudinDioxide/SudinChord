@@ -1,6 +1,6 @@
 {
   "name": "@bitchord/desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "SudinChord Desktop for Windows 11",
   "main": "main.cjs",
@@ -22,6 +22,13 @@
     "directories": {
       "output": "dist-electron"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SudinDioxide",
+        "repo": "SudinChord"
+      }
+    ],
     "files": [
       "main.cjs",
       "preload.cjs",
@@ -29,10 +36,13 @@
       "ytAuth.cjs",
       "spotifyAuth.cjs",
       "loginModal.html",
+      "miniPlayer.html",
+      "assets/**/*",
       "dist/**/*",
       "extension/**/*",
       "bin/**/*",
-      "icon.png"
+      "icon.png",
+      "icon.ico"
     ],
     "extraResources": [
       {
@@ -45,7 +55,7 @@
         "nsis",
         "dir"
       ],
-      "icon": "icon.png"
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -55,6 +65,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "ffmpeg-static": "^5.3.0"
   }
 }

@@ -4,7 +4,13 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('electronPlatform', {
   isElectron: true,
   isWindows: process.platform === 'win32',
-  sendMediaState: (state) => ipcRenderer.send('bitchord:media-state', state),
+  sendMediaState: (state) => ipcRenderer.send('media:state', state),
+  toggleMiniPlayer: (options) => ipcRenderer.send('window:toggle-mini-player', options),
+  onMediaCommand: (callback) => {
+    const handler = (_event, cmd, data) => callback(cmd, data);
+    ipcRenderer.on('media:command', handler);
+    return () => ipcRenderer.removeListener('media:command', handler);
+  },
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close'),
@@ -14,6 +20,39 @@ contextBridge.exposeInMainWorld('electronPlatform', {
   parseLocalFiles: (filePaths) => ipcRenderer.invoke('local:parse-files', filePaths),
   getFolderArt: (dirPath) => ipcRenderer.invoke('local:get-folder-art', dirPath),
   getPathForFile: (file) => (webUtils ? webUtils.getPathForFile(file) : file?.path || null),
+  // Picture-in-Picture & Mini-Player Video Streaming
+  sendPipOffer: (offer) => ipcRenderer.send('pip:offer', offer),
+  onPipAnswer: (callback) => {
+    const handler = (_event, answer) => callback(answer);
+    ipcRenderer.on('pip:answer', handler);
+    return () => ipcRenderer.removeListener('pip:answer', handler);
+  },
+  sendPipCandidate: (candidate) => ipcRenderer.send('pip:candidate-to-pip', candidate),
+  onPipCandidate: (callback) => {
+    const handler = (_event, candidate) => callback(candidate);
+    ipcRenderer.on('pip:candidate-to-main', handler);
+    return () => ipcRenderer.removeListener('pip:candidate-to-main', handler);
+  },
+  sendPipVideoActive: (active) => ipcRenderer.send('pip:video-active', active),
+  sendLyrics: (lyrics) => ipcRenderer.send('media:lyrics', lyrics),
+  onMiniPlayerStatus: (callback) => {
+    const handler = (_event, isOpen) => callback(isOpen);
+    ipcRenderer.on('miniplayer:status', handler);
+    return () => ipcRenderer.removeListener('miniplayer:status', handler);
+  },
+  // Auto-Updater hooks
+  checkForUpdates: () => ipcRenderer.send('app:check-for-updates'),
+  installUpdate: () => ipcRenderer.send('app:install-update'),
+  onUpdateAvailable: (callback) => {
+    const handler = (_event, info) => callback(info);
+    ipcRenderer.on('app:update-available', handler);
+    return () => ipcRenderer.removeListener('app:update-available', handler);
+  },
+  onUpdateDownloaded: (callback) => {
+    const handler = (_event, info) => callback(info);
+    ipcRenderer.on('app:update-downloaded', handler);
+    return () => ipcRenderer.removeListener('app:update-downloaded', handler);
+  },
 });
 
 // 2. Built-in Native Bridge Relay

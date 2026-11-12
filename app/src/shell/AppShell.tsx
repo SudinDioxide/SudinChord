@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { resumeSession } from '@/party/listenTogether';
 import { startPartySync } from '@/party/partySync';
 import { useDiscordPresence } from '@/playback/discordPresence';
+import { useMediaSession } from '@/playback/mediaSession';
 import { startHistoryReporting } from '@/playback/historyReporting';
 import { startLivePresence } from '@/playback/livePresence';
 import { Outlet, useNavigate } from 'react-router';
@@ -16,6 +17,8 @@ import { MobileTopBar } from './MobileTopBar';
 import { PlayerBar } from './PlayerBar';
 import { SidePanel } from './SidePanel';
 import { Sidebar } from './Sidebar';
+import { AmbientAppBackdrop } from './AmbientAppBackdrop';
+import { NewPlaylistModal } from '@/components/music/NewPlaylistModal';
 import { Music2 } from 'lucide-react';
 import { localTracksManager } from '@/playback/local/localTracks';
 import { playList } from '@/components/music/play';
@@ -32,6 +35,7 @@ const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ 
 export function AppShell() {
   useKeyboardShortcuts();
   useDiscordPresence();
+  useMediaSession();
   // Listen Together: pick a party back up after a reload, and keep the player in step with it.
   useEffect(() => {
     resumeSession();
@@ -51,6 +55,22 @@ export function AppShell() {
   const fullScreen = useUi((s) => s.fullScreen);
   const navigate = useNavigate();
   const [dragging, setDragging] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{ version: string } | null>(null);
+
+  useEffect(() => {
+    const ep = (window as unknown as {
+      electronPlatform?: {
+        onUpdateDownloaded?: (cb: (info: { version: string }) => void) => () => void;
+        installUpdate?: () => void;
+      };
+    }).electronPlatform;
+
+    if (ep?.onUpdateDownloaded) {
+      return ep.onUpdateDownloaded((info) => {
+        setUpdateInfo(info);
+      });
+    }
+  }, []);
 
   useEffect(() => {
     let counter = 0;
@@ -119,6 +139,7 @@ export function AppShell() {
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto]">
       {/* The side panel slides in from beyond the right edge; never let it scroll the page. */}
       <div className="relative min-h-0 overflow-hidden">
+        <AmbientAppBackdrop />
         <Sidebar />
         <MobileTopBar />
         {/* The page scrolls under the fixed sidebar and the floating player. */}
@@ -133,14 +154,35 @@ export function AppShell() {
         </main>
         <PlayerBar />
         <SidePanel />
+        <NewPlaylistModal />
       </div>
-      {banner}
+      {updateInfo ? (
+        <Banner
+          title={`SudinChord v${updateInfo.version} is ready!`}
+          detail="A new update has been downloaded in the background. Restart now to apply."
+          action={
+            <button
+              type="button"
+              className={bannerButtonClass}
+              onClick={() => {
+                const ep = (window as unknown as { electronPlatform?: { installUpdate?: () => void } }).electronPlatform;
+                ep?.installUpdate?.();
+              }}
+            >
+              Restart & Update
+            </button>
+          }
+          onDismiss={() => setUpdateInfo(null)}
+        />
+      ) : (
+        banner
+      )}
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/75 backdrop-blur-md">
           <div className="grid size-20 place-items-center rounded-full bg-key/20 text-key shadow-[0_0_40px_rgba(255,0,51,0.3)] animate-pulse">
             <Music2 size={40} />
           </div>
-          <p className="mt-4 type-title-2-emphasized text-white">Drop audio files to play in BitChord</p>
+          <p className="mt-4 type-title-2-emphasized text-white">Drop audio files to play in SudinChord</p>
           <p className="mt-1 type-callout text-white/70">Supports MP3, FLAC, WAV, M4A, AAC, OGG</p>
         </div>
       )}

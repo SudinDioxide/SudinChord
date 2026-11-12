@@ -17,6 +17,7 @@ export interface AutomixGraph {
   master: GainNode;
   decks: Deck[];
   dj: AutoDJ;
+  analyser: AnalyserNode;
 }
 
 /**
@@ -33,11 +34,16 @@ export function createAutomixGraph(
   const ctx = new AudioContext({ latencyHint: 'playback' });
   void ctx.resume();
   const master = new GainNode(ctx, { gain: 1 });
-  master.connect(ctx.destination);
+  const analyser = new AnalyserNode(ctx, {
+    fftSize: 256,
+    smoothingTimeConstant: 0.82,
+  });
+  master.connect(analyser);
+  analyser.connect(ctx.destination);
   const decks = audios.map((audio, n) => new Deck(n === 0 ? 'A' : 'B', ctx, audio, master));
   // the loop mix's stretch decks (AutoMix's own), built the first time a loop mix is prepared
   let loops: Promise<[LoopDeck, LoopDeck]> | null = null;
   const loopDecks = () => (loops ??= Promise.all([LoopDeck.create(ctx, master), LoopDeck.create(ctx, master)]));
   const dj = new AutoDJ({ ctx, loopDecks, ...host(decks) }, onUpdate);
-  return { ctx, master, decks, dj };
+  return { ctx, master, decks, dj, analyser };
 }

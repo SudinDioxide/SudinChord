@@ -155,8 +155,8 @@
   :root {
     color-scheme: dark;
 
-    --pageBG: #1f1f1f;
-    --pageBG-rgb: 31, 31, 31;
+    --pageBG: rgba(22, 22, 26, 0.85);
+    --pageBG-rgb: 22, 22, 26;
 
     --systemPrimary: #ffffffeb;
     --systemSecondary: #ffffffa3;

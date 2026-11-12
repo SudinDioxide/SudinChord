@@ -215,6 +215,14 @@ export interface BridgeMethods {
   'spotify.searchTracks': { params: { query: string }; result: SpotifyTrack[] };
   /** The track's looping canvas video, or null when it has none. */
   'spotify.canvas': { params: { trackId: string }; result: { url: string | null } };
+  'spotify.createPlaylist': {
+    params: { name: string; description?: string; isPublic?: boolean };
+    result: { id: string; name: string };
+  };
+  'spotify.addToPlaylist': {
+    params: { playlistId: string; uris: string[] };
+    result: Record<string, never>;
+  };
   'discord.state': { params: Record<string, never>; result: DiscordState };
   /** Opens the extension's page that connects an account (asks for discord.com, reads the token there). */
   'discord.connect': { params: Record<string, never>; result: Record<string, never> };

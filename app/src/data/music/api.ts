@@ -276,6 +276,23 @@ export async function addToPlaylist(playlistId: string, videoId: string): Promis
 }
 
 /**
+ * Removes a video from a YouTube playlist (InnerTube `playlist/removeVideos` or `browse/edit_playlist`).
+ */
+export async function removeFromPlaylist(playlistId: string, videoId: string): Promise<void> {
+  const yt = await getSignedInnertube();
+  const cleanId = playlistId.replace(/^VL/, '');
+  try {
+    await yt.playlist.removeVideos(cleanId, [videoId]);
+  } catch {
+    await yt.actions.execute('/browse/edit_playlist', {
+      playlistId: cleanId,
+      actions: [{ action: 'ACTION_REMOVE_VIDEO', removedVideoId: videoId }],
+      client: 'YTMUSIC',
+    });
+  }
+}
+
+/**
  * A new private playlist holding [videoIds], as YtMusicRepository.createPlaylist
  * makes one (InnerTube `playlist/create`). Returns its id, without the VL.
  */
@@ -291,6 +308,30 @@ export async function createPlaylist(title: string, videoIds: string[], descript
   const id = (response.data as { playlistId?: string } | undefined)?.playlistId;
   if (!id) throw new Error('YouTube Music did not make the playlist');
   return id;
+}
+
+/**
+ * Deletes a playlist owned by the user (InnerTube `playlist/delete`), or
+ * removes a saved playlist from the user's library (InnerTube `like/removelike`).
+ */
+export async function deletePlaylist(playlistId: string): Promise<void> {
+  const yt = await getSignedInnertube();
+  const cleanId = playlistId.replace(/^VL/, '');
+  try {
+    await yt.actions.execute('/playlist/delete', {
+      playlistId: cleanId,
+      client: 'YTMUSIC',
+    });
+  } catch (error) {
+    try {
+      await yt.actions.execute('/like/removelike', {
+        target: { playlistId: cleanId },
+        client: 'YTMUSIC',
+      });
+    } catch {
+      throw error;
+    }
+  }
 }
 
 // ---- AutoPlay (phase 6) -------------------------------------------------------------

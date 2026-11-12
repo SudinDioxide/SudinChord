@@ -13,6 +13,9 @@ import { useYtAuth, ytAuthSnapshot } from '@/extension/useYtAuth';
 import { queryClient } from '@/lib/queryClient';
 import {
   addToPlaylist,
+  createPlaylist,
+  deletePlaylist,
+  removeFromPlaylist,
   fetchAlbum,
   fetchArtist,
   fetchBrowse,
@@ -32,7 +35,7 @@ import {
   type Paged,
 } from './api';
 import { isLibrarySection, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
-import type { AlbumPage, BrowseLink, BrowsePage, HeaderInfo, PlaylistPage, Shelf, Track } from './types';
+import type { AlbumPage, BrowseLink, BrowsePage, HeaderInfo, MusicItem, PlaylistPage, Shelf, Track } from './types';
 
 // TanStack Query for every browse request (prompt §1: caching, dedupe,
 // retries). YouTube requests need the extension, so every query waits for it;
@@ -193,7 +196,7 @@ export function useLibraryPlaylists() {
     queryKey: ['music', 'library', 'sidebar-playlists'],
     queryFn: fetchLibraryPlaylists,
     enabled: signedIn,
-    staleTime: 2 * 60_000,
+    staleTime: 10_000,
   });
 }
 
@@ -265,6 +268,116 @@ export function useAddToPlaylist() {
     onSettled: (_data, _error, { playlistId }) => {
       void queryClient.invalidateQueries({ queryKey: ['music', 'playlist', playlistId] });
       void queryClient.invalidateQueries({ queryKey: ['music', 'playlist', `VL${playlistId.replace(/^VL/, '')}`] });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist-options'] });
+      setTimeout(() => {
+        void queryClient.refetchQueries({ queryKey: ['music', 'playlist', playlistId] });
+        void queryClient.refetchQueries({ queryKey: ['music', 'playlist', `VL${playlistId.replace(/^VL/, '')}`] });
+      }, 1500);
+    },
+  });
+}
+
+export function useRemoveFromPlaylist() {
+  return useMutation({
+    mutationFn: ({ playlistId, videoId }: { playlistId: string; videoId: string }) => removeFromPlaylist(playlistId, videoId),
+    onMutate: ({ playlistId, videoId }) => {
+      // Optimistically remove track from playlist immediately for 0ms UI delay!
+      const clean = playlistId.replace(/^VL/, '');
+      const keys = [
+        ['music', 'playlist', clean],
+        ['music', 'playlist', `VL${clean}`],
+      ];
+      keys.forEach((key) => {
+        queryClient.setQueriesData({ queryKey: key }, (old: any) => {
+          if (!old?.pages) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: any) => ({
+              ...page,
+              tracks: page.tracks ? page.tracks.filter((t: any) => t.videoId !== videoId) : [],
+            })),
+          };
+        });
+      });
+    },
+    onSettled: (_data, _error, { playlistId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist', playlistId] });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist', `VL${playlistId.replace(/^VL/, '')}`] });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist-options'] });
+      setTimeout(() => {
+        void queryClient.refetchQueries({ queryKey: ['music', 'playlist', playlistId] });
+        void queryClient.refetchQueries({ queryKey: ['music', 'playlist', `VL${playlistId.replace(/^VL/, '')}`] });
+      }, 2000);
+    },
+  });
+}
+
+export function useCreateYouTubePlaylist() {
+  return useMutation({
+    mutationFn: ({ title, videoIds = [], description = '' }: { title: string; videoIds?: string[]; description?: string }) =>
+      createPlaylist(title, videoIds, description),
+    onSuccess: (playlistId, variables) => {
+      const cleanId = playlistId.replace(/^VL/, '');
+      const newItem: MusicItem = {
+        kind: 'playlist',
+        id: `VL${cleanId}`,
+        title: variables.title,
+        subtitle: 'Playlist',
+        artists: [],
+        album: null,
+        thumbnail: null,
+        wide: false,
+        durationSec: null,
+        explicit: false,
+      };
+
+      // 1. Instantly update sidebar cache (0ms delay!)
+      queryClient.setQueryData<MusicItem[]>(['music', 'library', 'sidebar-playlists'], (old) => {
+        return old ? [newItem, ...old] : [newItem];
+      });
+
+      // 2. Invalidate immediately
+      void queryClient.invalidateQueries({ queryKey: ['music', 'library'] });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist-options'] });
+
+      // 3. Multi-stage re-sync with YouTube's edge cache (1s and 2.5s)
+      setTimeout(() => void queryClient.refetchQueries({ queryKey: ['music', 'library', 'sidebar-playlists'] }), 1000);
+      setTimeout(() => void queryClient.refetchQueries({ queryKey: ['music', 'library'] }), 2500);
+    },
+  });
+}
+
+export function useDeleteYouTubePlaylist() {
+  return useMutation({
+    mutationFn: (playlistId: string) => deletePlaylist(playlistId),
+    onMutate: (playlistId) => {
+      const clean = playlistId.replace(/^VL/, '');
+
+      // 1. Instantly remove from sidebar cache (0ms delay!)
+      queryClient.setQueryData<MusicItem[]>(['music', 'library', 'sidebar-playlists'], (old) => {
+        return old ? old.filter((item) => item.id.replace(/^VL/, '') !== clean) : [];
+      });
+
+      // 2. Instantly remove from library playlists grid cache
+      queryClient.setQueriesData({ queryKey: ['music', 'library'] }, (old: any) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: {
+              ...page.data,
+              grid: page.data?.grid ? page.data.grid.filter((item: any) => item.id.replace(/^VL/, '') !== clean) : [],
+            },
+          })),
+        };
+      });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['music', 'library'] });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'playlist-options'] });
+      setTimeout(() => void queryClient.refetchQueries({ queryKey: ['music', 'library', 'sidebar-playlists'] }), 1500);
+      setTimeout(() => void queryClient.refetchQueries({ queryKey: ['music', 'library'] }), 3000);
     },
   });
 }

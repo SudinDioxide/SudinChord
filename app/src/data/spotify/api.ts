@@ -34,6 +34,14 @@ export function fetchSpotifyPlaylistInfo(playlistId: string) {
   return bridge().call('spotify.playlist', { playlistId }, { timeoutMs: 30_000 });
 }
 
+export async function createSpotifyPlaylist(name: string, description = '', isPublic = false): Promise<{ id: string; name: string }> {
+  return bridge().call('spotify.createPlaylist', { name, description, isPublic }, { timeoutMs: 30_000 });
+}
+
+export async function addToSpotifyPlaylist(playlistId: string, uris: string[]): Promise<unknown> {
+  return bridge().call('spotify.addToPlaylist', { playlistId, uris }, { timeoutMs: 30_000 });
+}
+
 /** Every track of a playlist; [onPage] gets the running list after each page, so a long one fills in. */
 export async function fetchSpotifyTracks(playlistId: string, onPage: (soFar: SpotifyTrack[], total: number) => void): Promise<SpotifyTrack[]> {
   const out: SpotifyTrack[] = [];

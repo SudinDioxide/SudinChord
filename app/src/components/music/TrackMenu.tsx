@@ -1,5 +1,6 @@
-import { ChevronLeft, ChevronRight, ListEnd, ListPlus, ListStart, MoreHorizontal, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderPlus, ListEnd, ListPlus, ListStart, MoreHorizontal, Plus, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { SiYoutube } from 'react-icons/si';
 import { Menu, MenuHeader, MenuItem, MenuSeparator, type MenuPlacement } from '@/components/Menu';
 import {
   useAddToPlaylist,
@@ -8,79 +9,108 @@ import {
   useSetLiked,
   useSignedIn,
 } from '@/data/music/queries';
+import { useLocalPlaylists, localPlaylists } from '@/playback/local/localPlaylists';
+import { useNewPlaylistModal } from '@/state/newPlaylistModal';
 import type { Track } from '@/data/music/types';
 import { usePlayer } from '@/state/player';
 
-function PlaylistChoices({ videoId, onDone, onBack }: { videoId: string; onDone: () => void; onBack: () => void }) {
-  const options = usePlaylistOptions(videoId, true);
-  const add = useAddToPlaylist();
+function PlaylistChoices({ track, onDone, onBack }: { track: Track; onDone: () => void; onBack: () => void }) {
+  const options = usePlaylistOptions(track.videoId, true);
+  const addYouTube = useAddToPlaylist();
+  const localLists = useLocalPlaylists();
+  const signedIn = useSignedIn();
+  const openNew = useNewPlaylistModal((s) => s.open);
+
   return (
     <>
       <MenuItem icon={<ChevronLeft size={14} />} onSelect={onBack}>
         Back
       </MenuItem>
       <MenuSeparator />
-      <MenuHeader>Add to Playlist</MenuHeader>
-      {options.isPending && (
-        <MenuItem disabled onSelect={() => {}}>
-          Loading…
-        </MenuItem>
+      <MenuItem
+        icon={<Plus size={14} className="text-emerald-400" />}
+        onSelect={() => {
+          onDone();
+          openNew({ initialTrack: track });
+        }}
+      >
+        New Playlist...
+      </MenuItem>
+
+      {/* Local Playlists */}
+      {localLists.length > 0 && (
+        <>
+          <MenuSeparator />
+          <MenuHeader>Local Playlists</MenuHeader>
+          {localLists.map((p) => (
+            <MenuItem
+              key={p.id}
+              icon={<FolderPlus size={14} className="text-emerald-400" />}
+              onSelect={() => {
+                localPlaylists.addTracks(p.id, [track]);
+                onDone();
+              }}
+            >
+              {p.name}
+            </MenuItem>
+          ))}
+        </>
       )}
-      {options.isError && (
-        <MenuItem disabled onSelect={() => {}}>
-          Couldn’t load your playlists
-        </MenuItem>
+
+      {/* YouTube Playlists */}
+      {signedIn && options.data && options.data.length > 0 && (
+        <>
+          <MenuSeparator />
+          <MenuHeader>YouTube Playlists</MenuHeader>
+          {options.data.map((option) => (
+            <MenuItem
+              key={option.playlistId}
+              icon={<SiYoutube size={14} className="text-red-500" />}
+              onSelect={() => {
+                addYouTube.mutate({ playlistId: option.playlistId, videoId: track.videoId });
+                onDone();
+              }}
+            >
+              {option.title}
+            </MenuItem>
+          ))}
+        </>
       )}
-      {options.data?.length === 0 && (
-        <MenuItem disabled onSelect={() => {}}>
-          No playlists yet
-        </MenuItem>
-      )}
-      {options.data?.map((option) => (
-        <MenuItem
-          key={option.playlistId}
-          onSelect={() => {
-            add.mutate({ playlistId: option.playlistId, videoId });
-            onDone();
-          }}
-        >
-          {option.title}
-        </MenuItem>
-      ))}
     </>
   );
 }
 
-/** Favorite and Add to Playlist: the account's actions, signed in only. */
-function AccountItems({ track, onClose, onPlaylists }: { track: Track; onClose: () => void; onPlaylists: () => void }) {
+function AccountFavorite({ track, onClose }: { track: Track; onClose: () => void }) {
   const status = useLikeStatus(track.videoId);
   const setLiked = useSetLiked();
   const liked = status.data === 'LIKE';
   return (
-    <>
-      <MenuSeparator />
-      <MenuItem
-        icon={<Star size={15} fill={liked ? 'currentColor' : 'none'} />}
-        disabled={status.isPending}
-        onSelect={() => {
-          setLiked.mutate({ videoId: track.videoId, liked: !liked });
-          onClose();
-        }}
-      >
-        {liked ? 'Unfavorite' : 'Favorite'}
-      </MenuItem>
-      <MenuItem icon={<ListPlus size={15} />} trailing={<ChevronRight size={14} />} onSelect={onPlaylists}>
-        Add to Playlist
-      </MenuItem>
-    </>
+    <MenuItem
+      icon={<Star size={15} fill={liked ? 'currentColor' : 'none'} />}
+      disabled={status.isPending}
+      onSelect={() => {
+        setLiked.mutate({ videoId: track.videoId, liked: !liked });
+        onClose();
+      }}
+    >
+      {liked ? 'Unfavorite' : 'Favorite'}
+    </MenuItem>
   );
 }
 
-function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void }) {
+function TrackMenuItems({
+  track,
+  onClose,
+  onRemoveFromPlaylist,
+}: {
+  track: Track;
+  onClose: () => void;
+  onRemoveFromPlaylist?: () => void;
+}) {
   const [view, setView] = useState<'main' | 'playlists'>('main');
   const signedIn = useSignedIn();
   if (view === 'playlists') {
-    return <PlaylistChoices videoId={track.videoId} onDone={onClose} onBack={() => setView('main')} />;
+    return <PlaylistChoices track={track} onDone={onClose} onBack={() => setView('main')} />;
   }
   const { playNext, addToQueue } = usePlayer.getState();
   return (
@@ -91,7 +121,25 @@ function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void 
       <MenuItem icon={<ListEnd size={15} />} onSelect={() => (onClose(), addToQueue([track]))}>
         Add to Queue
       </MenuItem>
-      {signedIn && <AccountItems track={track} onClose={onClose} onPlaylists={() => setView('playlists')} />}
+      <MenuSeparator />
+      {signedIn && <AccountFavorite track={track} onClose={onClose} />}
+      <MenuItem icon={<ListPlus size={15} />} trailing={<ChevronRight size={14} />} onSelect={() => setView('playlists')}>
+        Add to Playlist
+      </MenuItem>
+      {onRemoveFromPlaylist && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            icon={<Trash2 size={15} className="text-red-400" />}
+            onSelect={() => {
+              onClose();
+              onRemoveFromPlaylist();
+            }}
+          >
+            <span className="text-red-400">Remove from Playlist</span>
+          </MenuItem>
+        </>
+      )}
     </>
   );
 }
@@ -105,6 +153,7 @@ export function TrackMenu({
   className,
   placement,
   onOpenChange,
+  onRemoveFromPlaylist,
 }: {
   track: Track;
   className?: string;
@@ -112,6 +161,8 @@ export function TrackMenu({
   placement?: MenuPlacement;
   /** Told when the menu opens and closes; most mounts don't need to know. */
   onOpenChange?: (open: boolean) => void;
+  /** When set, displays a "Remove from Playlist" option in the menu. */
+  onRemoveFromPlaylist?: () => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = useCallback(() => setAnchor(null), []);
@@ -136,7 +187,7 @@ export function TrackMenu({
       </button>
       {anchor && (
         <Menu anchor={anchor} placement={placement} onClose={close} label={track.title}>
-          <TrackMenuItems track={track} onClose={close} />
+          <TrackMenuItems track={track} onClose={close} onRemoveFromPlaylist={onRemoveFromPlaylist} />
         </Menu>
       )}
     </>

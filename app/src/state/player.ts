@@ -153,6 +153,14 @@ export function getAudio(): HTMLAudioElement | null {
   return decks?.[active]?.audio ?? null;
 }
 
+/** The active Web Audio AnalyserNode for real-time spectrum/waveform visualizers. */
+export function getAudioAnalyser(): AnalyserNode | null {
+  if (graph?.ctx && graph.ctx.state === 'suspended') {
+    void graph.ctx.resume();
+  }
+  return graph?.analyser ?? null;
+}
+
 /**
  * Where the song in front is, in seconds, and whether it's moving. Its
  * element, except while a loop mix plays it from a deck: then the mix's own
@@ -204,6 +212,8 @@ function getDecks(): Promise<Deck[]> {
       return deck;
     });
     applyVolumes();
+    // Initialize Web Audio graph for volume, equalizer and audio spectrum visualizer
+    void ensureAutomix();
     // For browser-driven tests: the elements aren't in the DOM.
     if (import.meta.env.DEV) Object.defineProperty(window, '__bcAudio', { get: getAudio, configurable: true });
     return decks;
@@ -296,6 +306,7 @@ function ensureAutomix(): Promise<AutomixGraph | null> {
       (snap) => usePlayer.setState({ automixState: snap }),
     );
     graph = built;
+    void built.ctx.resume();
     applyVolumes();
     if (import.meta.env.DEV) Object.assign(window, { __bcAutomix: built, __bcAnalyzer: analyzer });
     return built;
@@ -710,6 +721,7 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
     applyTrack(track, entry.track);
     if (!autoplay) usePlayer.setState({ status: 'paused' });
     afterTrackStarted();
+    void graph?.ctx.resume();
     syncAutomix();
   } catch (error) {
     if (token !== loadToken || (error instanceof Error && error.name === 'SupersededError')) return;
@@ -1012,7 +1024,13 @@ function bindElement(deck: Deck, n: number) {
     if (usePlayer.getState().status === 'error' && status !== 'playing') return;
     usePlayer.setState({ status });
   };
-  element.addEventListener('playing', () => set('playing'));
+  element.addEventListener('play', () => {
+    void graph?.ctx.resume();
+  });
+  element.addEventListener('playing', () => {
+    set('playing');
+    void graph?.ctx.resume();
+  });
   element.addEventListener('pause', () => {
     if (!element.ended) set('paused');
   });

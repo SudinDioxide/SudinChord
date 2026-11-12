@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title></title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background: transparent !important;
+      background-color: transparent !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #f3f4f6;
+    }
+
+    /* Main Glassmorphic Card Container - Strict NO white borders or outlines */
+    .player-card {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(16, 20, 30, 0.94);
+      backdrop-filter: blur(40px) saturate(210%);
+      -webkit-backdrop-filter: blur(40px) saturate(210%);
+      border: none !important;
+      outline: none !important;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      transition: box-shadow 0.25s, background 0.3s;
+    }
+
+    .player-card:hover {
+      box-shadow: 
+        0 20px 48px rgba(0, 0, 0, 0.8),
+        0 0 16px rgba(255, 0, 51, 0.14);
+    }
+
+    /* Media Area (holds Video, Header, Controls, Timeline) */
+    .media-container {
+      position: relative;
+      width: 100%;
+      height: 125px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: none !important;
+    }
+
+    .player-card.has-video:not(.lyrics-open) .media-container {
+      height: 100%;
+      flex: 1;
+    }
+
+    .player-card.has-video.lyrics-open .media-container {
+      flex-shrink: 0;
+    }
+
+    /* Full Window Video Background */
+    .mini-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 18px;
+      z-index: 1;
+      display: none;
+      background: #000;
+      border: none !important;
+      outline: none !important;
+    }
+
+    .player-card.has-video .mini-video {
+      display: block;
+    }
+
+    /* Header Bar (Draggable) */
+    .header {
+      -webkit-app-region: drag;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px 0 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      z-index: 3;
+      border: none !important;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .player-card.has-video .header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 38px;
+      padding: 8px 10px 0 14px;
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.88) 0%, rgba(10, 12, 18, 0.4) 65%, transparent 100%);
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-title {
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.6px;
+    }
+
+    .video-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 5px;
+      background: #ff0033;
+      color: #fff;
+      font-size: 8.5px;
+      font-weight: 800;
+      border-radius: 4px;
+      letter-spacing: 0.8px;
+      box-shadow: 0 0 8px rgba(255, 0, 51, 0.5);
+    }
+
+    .header-actions {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: #9ca3af;
+      cursor: pointer;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s, transform 0.1s;
+    }
+
+    .icon-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(1.05);
+    }
+
+    .icon-btn.active {
+      color: #ff0033;
+      background: rgba(255, 0, 51, 0.15);
+      border-color: rgba(255, 0, 51, 0.35);
+    }
+
+    /* Content Layout */
+    .content {
+      display: flex;
+      align-items: center;
+      padding: 2px 14px 6px 14px;
+      gap: 12px;
+      min-width: 0;
+      -webkit-app-region: drag;
+      z-index: 3;
+      border: none !important;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .player-card.has-video .content {
+      position: absolute;
+      bottom: 4px;
+      left: 0;
+      right: 0;
+      padding: 18px 14px 8px 14px;
+      background: linear-gradient(0deg, rgba(10, 12, 18, 0.92) 0%, rgba(10, 12, 18, 0.55) 60%, transparent 100%);
+    }
+
+    /* Controls hide on idle in video mode */
+    .player-card.has-video.controls-hidden:not(.lyrics-open) .header,
+    .player-card.has-video.controls-hidden:not(.lyrics-open) .content {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Artwork (Hidden when in video mode) */
+    .artwork-container {
+      width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      -webkit-app-region: no-drag;
+    }
+
+    .player-card.has-video .artwork-container {
+      display: none !important;
+    }
+
+    .artwork {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .artwork-fallback {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: #6b7280;
+    }
+
+    /* Track details */
+    .track-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      -webkit-app-region: drag;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.25;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    }
+
+    .artist {
+      font-size: 11px;
+      color: #a1a1aa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+      line-height: 1.2;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 5px;
+      -webkit-app-region: no-drag;
+    }
+
+    .transport-btn {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #e5e7eb;
+      border-radius: 50%;
+      width: 27px;
+      height: 27px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: transform 0.12s, background 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+
+    .transport-btn:hover {
+      background: rgba(255, 255, 255, 0.22);
+      color: #fff;
+      transform: scale(1.08);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .transport-btn.active {
+      color: #ff0033;
+      background: rgba(255, 0, 51, 0.16);
+      border-color: rgba(255, 0, 51, 0.35);
+      box-shadow: 0 0 10px rgba(255, 0, 51, 0.35);
+    }
+
+    .transport-btn.primary {
+      background: linear-gradient(135deg, #ff0033 0%, #d6002b 100%);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      width: 31px;
+      height: 31px;
+      box-shadow: 0 2px 12px rgba(255, 0, 51, 0.45);
+    }
+
+    .transport-btn.primary:hover {
+      background: linear-gradient(135deg, #ff1a47 0%, #e6002e 100%);
+      transform: scale(1.1);
+      box-shadow: 0 4px 16px rgba(255, 0, 51, 0.6);
+    }
+
+    /* Interactive Timeline Scrubber */
+    .progress-bar-container {
+      position: relative;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: height 0.15s ease;
+      z-index: 4;
+    }
+
+    .player-card.has-video .progress-bar-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+
+    .progress-bar-container:hover {
+      height: 7px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #ff0033;
+      box-shadow: 0 0 10px rgba(255, 0, 51, 0.7);
+      pointer-events: none;
+    }
+
+    /* Lyrics Dropdown Panel */
+    .lyrics-panel {
+      position: relative;
+      z-index: 4;
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(12, 15, 22, 0.94);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .player-card.lyrics-open .lyrics-panel {
+      display: flex;
+    }
+
+    .lyrics-header {
+      -webkit-app-region: drag;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #6b7280;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      flex-shrink: 0;
+    }
+
+    .lyrics-badge {
+      font-size: 8px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #9ca3af;
+      letter-spacing: 0.5px;
+    }
+
+    .lyrics-badge.synced {
+      background: rgba(255, 0, 51, 0.2);
+      color: #ff3355;
+    }
+
+    .lyrics-scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 14px 16px 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+      -webkit-app-region: no-drag;
+    }
+
+    .lyrics-scroll-area::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .lyrics-scroll-area::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    /* Lyric Line Base Style */
+    .lyric-line {
+      font-size: 13px;
+      font-weight: 500;
+      color: #9ca3af;
+      line-height: 1.5;
+      transform-origin: left center;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ONLY SYNCED LYRICS: Interactive Hover, Click-to-seek & Duration Tracking */
+    .player-card.is-synced-lyrics .lyric-line {
+      cursor: pointer;
+      opacity: 0.45;
+    }
+
+    .player-card.is-synced-lyrics .lyric-line:hover {
+      opacity: 0.85;
+      color: #fff;
+    }
+
+    .player-card.is-synced-lyrics .lyric-line.active {
+      color: #ffffff;
+      font-size: 14.5px;
+      font-weight: 700;
+      opacity: 1;
+      transform: scale(1.03);
+      text-shadow: 0 0 16px rgba(255, 255, 255, 0.45);
+    }
+
+    /* PLAIN LYRICS: Static Readable Text - NO seek on click, NO duration sync highlight */
+    .player-card:not(.is-synced-lyrics) .lyric-line {
+      cursor: default;
+      opacity: 0.85;
+      color: #d1d5db;
+      user-select: text;
+    }
+
+    .lyrics-empty {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="player-card" id="playerCard">
+    <!-- Top Playback Area -->
+    <div class="media-container" id="mediaContainer">
+      <!-- Live Video Element -->
+      <video id="miniVideo" class="mini-video" autoplay playsinline muted></video>
+
+      <!-- Draggable Header -->
+      <div class="header" id="playerHeader">
+        <div class="brand-wrap">
+          <span class="brand-title">SudinChord</span>
+          <span class="video-badge" id="videoBadge" style="display: none;">VIDEO</span>
+        </div>
+        <div class="header-actions">
+          <!-- Lyrics Dropdown Toggle -->
+          <button class="icon-btn" id="btnLyrics" title="Toggle Lyrics">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              <line x1="9" y1="10" x2="15" y2="10"></line>
+              <line x1="9" y1="14" x2="13" y2="14"></line>
+            </svg>
+          </button>
+
+          <!-- Always on Top Pin -->
+          <button class="icon-btn active" id="btnPin" title="Toggle Always on Top">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="17" x2="12" y2="22"></line>
+              <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+            </svg>
+          </button>
+
+          <!-- Expand to Main Window -->
+          <button class="icon-btn" id="btnExpand" title="Restore Main Window">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <polyline points="9 21 3 21 3 15"></polyline>
+              <line x1="21" y1="3" x2="14" y2="10"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+          </button>
+
+          <!-- Close Mini Player -->
+          <button class="icon-btn" id="btnClose" title="Close Mini Player">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Player Controls Area -->
+      <div class="content" id="playerContent">
+        <div class="artwork-container" id="artworkContainer">
+          <img id="artwork" class="artwork" src="" alt="Album Artwork" style="display: none;" />
+          <div id="artworkFallback" class="artwork-fallback">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+          </div>
+        </div>
+
+        <div class="track-info">
+          <div id="trackTitle" class="title">No track playing</div>
+          <div id="trackArtist" class="artist">SudinChord</div>
+
+          <div class="controls">
+            <!-- Shuffle Button -->
+            <button class="transport-btn" id="btnShuffle" title="Shuffle">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 3 21 3 21 8"></polyline>
+                <line x1="4" y1="20" x2="21" y2="3"></line>
+                <polyline points="21 16 21 21 16 21"></polyline>
+                <line x1="15" y1="15" x2="21" y2="21"></line>
+                <line x1="4" y1="4" x2="9" y2="9"></line>
+              </svg>
+            </button>
+
+            <!-- Previous -->
+            <button class="transport-btn" id="btnPrev" title="Previous (Ctrl+Alt+Left)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="3"></line>
+              </svg>
+            </button>
+
+            <!-- Play/Pause -->
+            <button class="transport-btn primary" id="btnPlay" title="Play/Pause (Ctrl+Alt+Space)">
+              <svg id="playIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <svg id="pauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+            </button>
+
+            <!-- Next -->
+            <button class="transport-btn" id="btnNext" title="Next (Ctrl+Alt+Right)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="3"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrubber Timeline (pinned to the bottom) -->
+      <div class="progress-bar-container" id="progressBarContainer" title="Click or drag to seek">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- Dropdown Lyrics Panel -->
+    <div class="lyrics-panel" id="lyricsPanel">
+      <div class="lyrics-header">
+        <span>LYRICS</span>
+        <span class="lyrics-badge" id="lyricsBadge">NOT SYNCED</span>
+      </div>
+      <div class="lyrics-scroll-area" id="lyricsScroll">
+        <div class="lyrics-empty" id="lyricsEmpty">Loading lyrics...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const playerCard = document.getElementById('playerCard');
+    const mediaContainer = document.getElementById('mediaContainer');
+    const miniVideo = document.getElementById('miniVideo');
+    const videoBadge = document.getElementById('videoBadge');
+    const artworkEl = document.getElementById('artwork');
+    const artworkFallbackEl = document.getElementById('artworkFallback');
+    const titleEl = document.getElementById('trackTitle');
+    const artistEl = document.getElementById('trackArtist');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const progressBar = document.getElementById('progressBar');
+    const progressBarContainer = document.getElementById('progressBarContainer');
+    const btnPin = document.getElementById('btnPin');
+    const btnLyrics = document.getElementById('btnLyrics');
+    const btnShuffle = document.getElementById('btnShuffle');
+    const lyricsBadge = document.getElementById('lyricsBadge');
+    const lyricsScroll = document.getElementById('lyricsScroll');
+
+    let isPinned = true;
+    let isPlaying = false;
+    let isShuffle = false;
+    let isVideoMode = false;
+    let isLyricsOpen = false;
+    let currentDurationSec = 0;
+    let currentPositionSec = 0;
+    let idleTimer = null;
+    let peerConnection = null;
+    let currentLyrics = null;
+    let lastActiveLyricIndex = -1;
+    let currentTrackTitle = '';
+    let currentVideoAspect = 16 / 9;
+
+    // Reset or show overlay controls on hover
+    function showControls() {
+      playerCard.classList.remove('controls-hidden');
+      if (idleTimer) clearTimeout(idleTimer);
+      if (isVideoMode && isPlaying && !isLyricsOpen) {
+        idleTimer = setTimeout(() => {
+          playerCard.classList.add('controls-hidden');
+        }, 2600);
+      }
+    }
+
+    document.addEventListener('mousemove', showControls);
+    document.addEventListener('mouseenter', showControls);
+    document.addEventListener('mouseleave', () => {
+      if (isVideoMode && isPlaying && !isLyricsOpen) {
+        playerCard.classList.add('controls-hidden');
+      }
+    });
+
+    // 1. WebRTC Loopback Stream for live music video mirroring
+    async function waitForIceGathering(pc, timeoutMs = 500) {
+      if (pc.iceGatheringState === 'complete') return;
+      await new Promise((resolve) => {
+        let timer = null;
+        const check = () => {
+          if (pc.iceGatheringState === 'complete') {
+            pc.removeEventListener('icegatheringstatechange', check);
+            if (timer) clearTimeout(timer);
+            resolve();
+          }
+        };
+        pc.addEventListener('icegatheringstatechange', check);
+        timer = setTimeout(() => {
+          pc.removeEventListener('icegatheringstatechange', check);
+          resolve();
+        }, timeoutMs);
+      });
+    }
+
+    ipcRenderer.on('pip:offer', async (_event, offer) => {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+
+      peerConnection = new RTCPeerConnection({ iceServers: [] });
+
+      peerConnection.onconnectionstatechange = () => {
+        console.log('[MiniPlayer Receiver] Connection state:', peerConnection.connectionState);
+      };
+
+      peerConnection.ontrack = (event) => {
+        console.log('[MiniPlayer Receiver] Received video track:', event.track?.kind);
+        if (event.streams && event.streams[0]) {
+          miniVideo.srcObject = event.streams[0];
+          miniVideo.play().catch((err) => console.warn('miniVideo play error:', err));
+        }
+      };
+
+      try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        await waitForIceGathering(peerConnection, 500);
+
+        const fullAnswer = peerConnection.localDescription;
+        if (fullAnswer) {
+          ipcRenderer.send('pip:answer', { type: fullAnswer.type, sdp: fullAnswer.sdp });
+        }
+      } catch (err) {
+        console.warn('[MiniPlayer] WebRTC offer error:', err);
+      }
+    });
+
+    // Compute and apply window size based on video & lyrics state
+    function getTargetDimensions() {
+      const width = isVideoMode ? 384 : 360;
+      const mediaHeight = isVideoMode
+        ? Math.round(width / (currentVideoAspect > 0.5 ? currentVideoAspect : (16 / 9)))
+        : 125;
+      const height = isLyricsOpen ? mediaHeight + 240 : mediaHeight;
+      return { width, height, mediaHeight };
+    }
+
+    function updateWindowSize(aspect) {
+      if (aspect && aspect > 0.5) {
+        currentVideoAspect = aspect;
+      }
+      const dims = getTargetDimensions();
+      if (isVideoMode) {
+        mediaContainer.style.height = isLyricsOpen ? `${dims.mediaHeight}px` : '100%';
+      } else {
+        mediaContainer.style.height = '125px';
+      }
+      ipcRenderer.send('miniplayer:resize', { width: dims.width, height: dims.height });
+    }
+
+    // 2. Handle Video Mode switching
+    function setVideoMode(hasVideo, aspect) {
+      if (isVideoMode === hasVideo && (!aspect || aspect === currentVideoAspect)) return;
+      isVideoMode = hasVideo;
+      if (aspect && aspect > 0.5) {
+        currentVideoAspect = aspect;
+      }
+
+      if (hasVideo) {
+        playerCard.classList.add('has-video');
+        videoBadge.style.display = 'inline-flex';
+        updateWindowSize(aspect);
+        showControls();
+      } else {
+        playerCard.classList.remove('has-video', 'controls-hidden');
+        videoBadge.style.display = 'none';
+        miniVideo.srcObject = null;
+        updateWindowSize();
+      }
+    }
+
+    ipcRenderer.on('pip:video-active', (_event, data) => {
+      const active = typeof data === 'boolean' ? data : !!data?.active;
+      const aspect = typeof data === 'object' ? data?.aspect : 16 / 9;
+      setVideoMode(active, aspect);
+    });
+
+    // 3. State sync from main process
+    ipcRenderer.on('player:sync', (_event, state) => {
+      if (!state) return;
+
+      // Track change detection - clear stale lyrics immediately
+      if (state.title && state.title !== currentTrackTitle) {
+        currentTrackTitle = state.title;
+        currentLyrics = null;
+        lastActiveLyricIndex = -1;
+        playerCard.classList.remove('is-synced-lyrics');
+        lyricsBadge.textContent = 'LOADING';
+        lyricsBadge.classList.remove('synced');
+        lyricsScroll.innerHTML = '<div class="lyrics-empty">Loading lyrics...</div>';
+      }
+
+      titleEl.textContent = state.title || 'No track playing';
+      artistEl.textContent = state.artist || 'SudinChord';
+
+      if (state.artworkUrl) {
+        artworkEl.src = state.artworkUrl;
+        artworkEl.style.display = 'block';
+        artworkFallbackEl.style.display = 'none';
+      } else {
+        artworkEl.style.display = 'none';
+        artworkFallbackEl.style.display = 'grid';
+      }
+
+      isPlaying = state.playing;
+      if (isPlaying) {
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+      } else {
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+        playerCard.classList.remove('controls-hidden');
+      }
+
+      isShuffle = !!state.shuffle;
+      btnShuffle.classList.toggle('active', isShuffle);
+
+      if (typeof state.durationSec === 'number') currentDurationSec = state.durationSec;
+      if (typeof state.positionSec === 'number') currentPositionSec = state.positionSec;
+
+      if (currentDurationSec > 0) {
+        const percent = Math.min(100, Math.max(0, (currentPositionSec / currentDurationSec) * 100));
+        progressBar.style.width = percent + '%';
+      }
+
+      if (typeof state.isVideo === 'boolean') {
+        setVideoMode(state.isVideo, state.videoAspect);
+      }
+
+      // Update lyrics sync highlight (strictly for synced lyrics only)
+      if (currentLyrics && currentLyrics.synced) {
+        syncLyricsPosition(currentPositionSec);
+      }
+    });
+
+    // 4. Handle Incoming Lyrics
+    ipcRenderer.on('player:lyrics', (_event, lyrics) => {
+      currentLyrics = lyrics;
+      lastActiveLyricIndex = -1;
+      renderLyrics(lyrics);
+    });
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderLyrics(lyrics) {
+      if (lyrics?.loading) {
+        playerCard.classList.remove('is-synced-lyrics');
+        lyricsBadge.textContent = 'LOADING';
+        lyricsBadge.classList.remove('synced');
+        lyricsScroll.innerHTML = '<div class="lyrics-empty">Loading lyrics...</div>';
+        return;
+      }
+
+      if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
+        playerCard.classList.remove('is-synced-lyrics');
+        lyricsBadge.textContent = 'NO LYRICS';
+        lyricsBadge.classList.remove('synced');
+        lyricsScroll.innerHTML = '<div class="lyrics-empty">No lyrics available for this track</div>';
+        return;
+      }
+
+      if (lyrics.synced) {
+        playerCard.classList.add('is-synced-lyrics');
+        lyricsBadge.textContent = 'SYNCED';
+        lyricsBadge.classList.add('synced');
+      } else {
+        playerCard.classList.remove('is-synced-lyrics');
+        lyricsBadge.textContent = 'PLAIN';
+        lyricsBadge.classList.remove('synced');
+      }
+
+      lyricsScroll.innerHTML = lyrics.lines
+        .map((l, idx) => `<div class="lyric-line" id="lyric-${idx}" data-time="${l.timeMs || 0}">${escapeHtml(l.text)}</div>`)
+        .join('');
+
+      // ONLY add click-to-seek listeners if lyrics are SYNCED
+      if (lyrics.synced) {
+        const lines = lyricsScroll.querySelectorAll('.lyric-line');
+        lines.forEach((lineEl) => {
+          lineEl.addEventListener('click', () => {
+            const timeMs = Number(lineEl.getAttribute('data-time'));
+            if (Number.isFinite(timeMs) && timeMs > 0) {
+              const targetSec = timeMs / 1000;
+              ipcRenderer.send('miniplayer:command', 'seek', targetSec);
+              if (currentDurationSec > 0) {
+                progressBar.style.width = (Math.min(100, (targetSec / currentDurationSec) * 100)) + '%';
+              }
+            }
+          });
+        });
+      }
+    }
+
+    function syncLyricsPosition(positionSec) {
+      // Strictly do not sync duration or scroll for plain lyrics
+      if (!isLyricsOpen || !currentLyrics || !currentLyrics.synced || !currentLyrics.lines) return;
+
+      const currentMs = positionSec * 1000;
+      let activeIndex = -1;
+      for (let i = 0; i < currentLyrics.lines.length; i++) {
+        if (currentLyrics.lines[i].timeMs <= currentMs) {
+          activeIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      if (activeIndex !== lastActiveLyricIndex) {
+        lastActiveLyricIndex = activeIndex;
+        const allLines = lyricsScroll.querySelectorAll('.lyric-line');
+        allLines.forEach((l, idx) => {
+          l.classList.toggle('active', idx === activeIndex);
+        });
+
+        if (activeIndex >= 0 && allLines[activeIndex]) {
+          const targetEl = allLines[activeIndex];
+          const containerHeight = lyricsScroll.clientHeight;
+          const targetTop = targetEl.offsetTop - lyricsScroll.offsetTop;
+          const targetHeight = targetEl.clientHeight;
+          lyricsScroll.scrollTo({
+            top: targetTop - containerHeight / 2 + targetHeight / 2,
+            behavior: 'smooth',
+          });
+        }
+      }
+    }
+
+    // Toggle Lyrics Dropdown Panel
+    btnLyrics.addEventListener('click', () => {
+      isLyricsOpen = !isLyricsOpen;
+      btnLyrics.classList.toggle('active', isLyricsOpen);
+      playerCard.classList.toggle('lyrics-open', isLyricsOpen);
+      updateWindowSize();
+      if (isLyricsOpen) {
+        showControls();
+        if (currentLyrics && currentLyrics.synced) {
+          setTimeout(() => syncLyricsPosition(currentPositionSec), 150);
+        }
+      }
+    });
+
+    // 5. Interactive Scrubber Seek (Click & Drag)
+    function seekFromEvent(e) {
+      if (currentDurationSec <= 0) return;
+      const rect = progressBarContainer.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const percent = Math.min(1, Math.max(0, clickX / rect.width));
+      const targetSec = percent * currentDurationSec;
+      progressBar.style.width = (percent * 100) + '%';
+      ipcRenderer.send('miniplayer:command', 'seek', targetSec);
+    }
+
+    let isScrubbing = false;
+
+    progressBarContainer.addEventListener('mousedown', (e) => {
+      isScrubbing = true;
+      seekFromEvent(e);
+      const onMove = (ev) => {
+        if (isScrubbing) seekFromEvent(ev);
+      };
+      const onUp = () => {
+        isScrubbing = false;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+
+    // 6. Transport Controls
+    btnShuffle.addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:command', 'toggleShuffle');
+    });
+
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:command', 'togglePlay');
+    });
+
+    document.getElementById('btnPrev').addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:command', 'previous');
+    });
+
+    document.getElementById('btnNext').addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:command', 'next');
+    });
+
+    document.getElementById('btnExpand').addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:expand');
+    });
+
+    document.getElementById('btnClose').addEventListener('click', () => {
+      ipcRenderer.send('miniplayer:close');
+    });
+
+    btnPin.addEventListener('click', () => {
+      isPinned = !isPinned;
+      btnPin.classList.toggle('active', isPinned);
+      ipcRenderer.send('miniplayer:toggle-pin', isPinned);
+    });
+
+    // DevTools inspection shortcut
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey && e.shiftKey && e.key === 'I') || e.key === 'F12') {
+        ipcRenderer.send('miniplayer:open-devtools');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-const { app, BrowserWindow, session, ipcMain, nativeTheme, shell, dialog, protocol, net } = require('electron');
+const { app, BrowserWindow, session, ipcMain, nativeTheme, shell, dialog, protocol, net, globalShortcut, nativeImage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -36,7 +37,7 @@ function loadMetadataCache() {
         metadataCache.set(k, v);
       }
     }
-  } catch {}
+  } catch { }
 }
 
 function saveMetadataCache() {
@@ -48,8 +49,8 @@ function saveMetadataCache() {
     for (const [k, v] of metadataCache.entries()) {
       obj[k] = v;
     }
-    fs.promises.writeFile(p, JSON.stringify(obj)).catch(() => {});
-  } catch {}
+    fs.promises.writeFile(p, JSON.stringify(obj)).catch(() => { });
+  } catch { }
 }
 
 async function getCachedOrExtractMetadata(f) {
@@ -82,7 +83,7 @@ function getFfmpegPath() {
   try {
     const ff = require('ffmpeg-static');
     if (ff && fs.existsSync(ff)) return ff;
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -639,6 +640,12 @@ ipcMain.handle('bridge:call', async (_event, { method, params }) => {
     case 'spotify.canvas':
       return { url: await spotifyAuth.canvas(params?.trackId) };
 
+    case 'spotify.createPlaylist':
+      return await spotifyAuth.createPlaylist(params?.name, params?.description, params?.isPublic);
+
+    case 'spotify.addToPlaylist':
+      return await spotifyAuth.addToPlaylist(params?.playlistId, params?.uris);
+
     case 'discord.state':
       return {
         available: true,
@@ -661,6 +668,10 @@ ipcMain.handle('bridge:call', async (_event, { method, params }) => {
 
     case 'discord.presence':
       return {};
+
+    case 'miniPlayer:toggle':
+      toggleMiniPlayer();
+      return { success: true };
 
     default:
       throw new Error(`Unsupported method: ${method}`);
@@ -747,8 +758,8 @@ function createWindow() {
     height: 820,
     minWidth: 960,
     minHeight: 640,
-    backgroundColor: '#0a0a0c',
-    backgroundMaterial: process.platform === 'win32' ? 'mica' : undefined,
+    backgroundColor: '#00000000',
+    backgroundMaterial: process.platform === 'win32' ? 'acrylic' : undefined,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -762,6 +773,7 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: false, // Allows cross-origin audio streaming smoothly
       sandbox: false,
+      backgroundThrottling: false,
     },
     icon: fs.existsSync(path.join(__dirname, 'icon.png'))
       ? path.join(__dirname, 'icon.png')
@@ -773,6 +785,12 @@ function createWindow() {
   const devUrl = `http://localhost:${PORT}`;
   mainWindow.loadURL(devUrl).catch((err) => {
     console.error('[Desktop] Failed to load URL:', err);
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (message.includes('MiniPlayer') || message.includes('video') || message.includes('pip') || message.includes('RTC')) {
+      console.log(`[Main Console] [${level}] ${message} (${sourceId}:${line})`);
+    }
   });
 
   // Catch Google / YouTube sign in links and open the native login window
@@ -791,8 +809,20 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  mainWindow.on('close', () => {
+    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+      miniPlayerWindow.destroy();
+      miniPlayerWindow = null;
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+      miniPlayerWindow.destroy();
+      miniPlayerWindow = null;
+    }
+    app.quit();
   });
 }
 
@@ -830,7 +860,7 @@ ipcMain.handle('local:open-folder', async () => {
           files.push(full);
         }
       }
-    } catch {}
+    } catch { }
   }
   scan(folder);
 
@@ -875,7 +905,7 @@ ipcMain.handle('local:scan-folder', async (_event, folderPath) => {
           files.push(full);
         }
       }
-    } catch {}
+    } catch { }
   }
   scan(folderPath);
 
@@ -958,6 +988,297 @@ ipcMain.on('window:maximize', () => {
 });
 ipcMain.on('window:close', () => mainWindow?.close());
 
+// Mini Player & Global Hotkeys & Taskbar Controls
+let miniPlayerWindow = null;
+let currentMediaState = null;
+
+function getThumbarIcon(name) {
+  const p = path.join(__dirname, 'assets', `${name}.png`);
+  if (fs.existsSync(p)) {
+    return nativeImage.createFromPath(p);
+  }
+  return nativeImage.createEmpty();
+}
+
+function updateTaskbarThumbnailToolbar(state) {
+  if (!mainWindow || mainWindow.isDestroyed() || process.platform !== 'win32') return;
+  try {
+    const isPlaying = state?.playing;
+    const prevIcon = getThumbarIcon('prev');
+    const playIcon = getThumbarIcon('play');
+    const pauseIcon = getThumbarIcon('pause');
+    const nextIcon = getThumbarIcon('next');
+
+    mainWindow.setThumbarButtons([
+      {
+        tooltip: 'Previous Track (Ctrl+Alt+Left)',
+        icon: prevIcon,
+        click: () => mainWindow?.webContents.send('media:command', 'previous'),
+      },
+      {
+        tooltip: isPlaying ? 'Pause (Ctrl+Alt+Space)' : 'Play (Ctrl+Alt+Space)',
+        icon: isPlaying ? pauseIcon : playIcon,
+        click: () => mainWindow?.webContents.send('media:command', 'togglePlay'),
+      },
+      {
+        tooltip: 'Next Track (Ctrl+Alt+Right)',
+        icon: nextIcon,
+        click: () => mainWindow?.webContents.send('media:command', 'next'),
+      },
+    ]);
+  } catch (err) { }
+}
+
+let currentLyricsState = null;
+
+function createMiniPlayerWindow() {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.focus();
+    return;
+  }
+
+  miniPlayerWindow = new BrowserWindow({
+    width: 360,
+    height: 125,
+    frame: false,
+    resizable: true, // Enables smooth programmatic resizing via setBounds without Windows clamping
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    transparent: true,
+    backgroundColor: '#00000000', // Crucial: prevents white edges / DWM square canvas artifacts
+    hasShadow: false,
+    thickFrame: false, // Disables native Windows resize borders
+    roundedCorners: false, // Prevents DWM square corner clipping
+    show: false, // Avoid white flash before content renders
+    title: '',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      backgroundThrottling: false,
+    },
+    icon: fs.existsSync(path.join(__dirname, 'icon.png'))
+      ? path.join(__dirname, 'icon.png')
+      : undefined,
+  });
+
+  miniPlayerWindow.once('ready-to-show', () => {
+    miniPlayerWindow?.show();
+  });
+
+  miniPlayerWindow.loadFile(path.join(__dirname, 'miniPlayer.html'));
+
+  miniPlayerWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.send('miniplayer:status', true);
+    if (currentMediaState) {
+      miniPlayerWindow?.webContents.send('player:sync', currentMediaState);
+    }
+    if (currentLyricsState) {
+      miniPlayerWindow?.webContents.send('player:lyrics', currentLyricsState);
+    }
+  });
+
+  miniPlayerWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[MiniPlayer Console] [${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  miniPlayerWindow.on('closed', () => {
+    miniPlayerWindow = null;
+    mainWindow?.webContents.send('miniplayer:status', false);
+  });
+}
+
+function toggleMiniPlayer(options = {}) {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.close();
+    miniPlayerWindow = null;
+    mainWindow?.webContents.send('miniplayer:status', false);
+  } else {
+    createMiniPlayerWindow();
+    if (options?.minimizeMain !== false) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+      }
+    }
+  }
+}
+
+function registerGlobalShortcuts() {
+  const shortcuts = [
+    {
+      key: 'CommandOrControl+Alt+Space',
+      handler: () => mainWindow?.webContents.send('media:command', 'togglePlay'),
+    },
+    {
+      key: 'CommandOrControl+Alt+Right',
+      handler: () => mainWindow?.webContents.send('media:command', 'next'),
+    },
+    {
+      key: 'CommandOrControl+Alt+Left',
+      handler: () => mainWindow?.webContents.send('media:command', 'previous'),
+    },
+    {
+      key: 'CommandOrControl+Alt+Up',
+      handler: () => mainWindow?.webContents.send('media:command', 'volumeUp'),
+    },
+    {
+      key: 'CommandOrControl+Alt+Down',
+      handler: () => mainWindow?.webContents.send('media:command', 'volumeDown'),
+    },
+    {
+      key: 'CommandOrControl+Alt+M',
+      handler: () => toggleMiniPlayer(),
+    },
+    {
+      key: 'MediaPlayPause',
+      handler: () => mainWindow?.webContents.send('media:command', 'togglePlay'),
+    },
+    {
+      key: 'MediaNextTrack',
+      handler: () => mainWindow?.webContents.send('media:command', 'next'),
+    },
+    {
+      key: 'MediaPreviousTrack',
+      handler: () => mainWindow?.webContents.send('media:command', 'previous'),
+    },
+    {
+      key: 'MediaStop',
+      handler: () => mainWindow?.webContents.send('media:command', 'pause'),
+    },
+  ];
+
+  for (const { key, handler } of shortcuts) {
+    try {
+      globalShortcut.register(key, handler);
+    } catch (err) {
+      console.warn(`[Desktop] Global shortcut registration failed for ${key}:`, err.message);
+    }
+  }
+}
+
+ipcMain.on('media:state', (_event, state) => {
+  currentMediaState = state;
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.webContents.send('player:sync', state);
+  }
+  updateTaskbarThumbnailToolbar(state);
+});
+
+ipcMain.on('window:toggle-mini-player', (_event, options) => {
+  toggleMiniPlayer(options);
+});
+
+ipcMain.on('miniplayer:command', (_event, cmd, data) => {
+  mainWindow?.webContents.send('media:command', cmd, data);
+});
+
+ipcMain.on('media:lyrics', (_event, lyrics) => {
+  currentLyricsState = lyrics;
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.webContents.send('player:lyrics', lyrics);
+  }
+});
+
+ipcMain.on('miniplayer:expand', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.close();
+    miniPlayerWindow = null;
+    mainWindow?.webContents.send('miniplayer:status', false);
+  }
+});
+
+ipcMain.on('miniplayer:toggle-pin', (_event, isPinned) => {
+  miniPlayerWindow?.setAlwaysOnTop(isPinned);
+});
+
+ipcMain.on('miniplayer:close', () => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.close();
+    miniPlayerWindow = null;
+    mainWindow?.webContents.send('miniplayer:status', false);
+  }
+});
+
+ipcMain.on('miniplayer:resize', (_event, size) => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed() && size?.width && size?.height) {
+    const w = Math.round(size.width);
+    const h = Math.round(size.height);
+    miniPlayerWindow.setBounds({ width: w, height: h });
+  }
+});
+
+ipcMain.on('miniplayer:open-devtools', () => {
+  miniPlayerWindow?.webContents.openDevTools({ mode: 'detach' });
+});
+
+// Picture-in-Picture WebRTC relays between mainWindow and miniPlayerWindow
+ipcMain.on('pip:offer', (_event, offer) => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.webContents.send('pip:offer', offer);
+  }
+});
+
+ipcMain.on('pip:answer', (_event, answer) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pip:answer', answer);
+  }
+});
+
+ipcMain.on('pip:candidate-to-pip', (_event, candidate) => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.webContents.send('pip:candidate', candidate);
+  }
+});
+
+ipcMain.on('pip:candidate-to-main', (_event, candidate) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pip:candidate-to-main', candidate);
+  }
+});
+
+ipcMain.on('pip:video-active', (_event, active) => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.webContents.send('pip:video-active', active);
+  }
+});
+
+// Auto-Updater configuration
+function setupAutoUpdater() {
+  autoUpdater.logger = console;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdater] Update available:', info.version);
+    mainWindow?.webContents.send('app:update-available', info);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdater] Update downloaded:', info.version);
+    mainWindow?.webContents.send('app:update-downloaded', info);
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.warn('[AutoUpdater] Update error:', err?.message || err);
+  });
+
+  ipcMain.on('app:check-for-updates', () => {
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.warn('[AutoUpdater] Manual check error:', err.message);
+      });
+    }
+  });
+
+  ipcMain.on('app:install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
+}
+
 app.on('second-instance', () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -998,10 +1319,31 @@ app.whenReady().then(async () => {
   setupNetworkInterceptors();
   await startLocalServer();
   createWindow();
+  registerGlobalShortcuts();
+  setupAutoUpdater();
+
+  if (app.isPackaged) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        console.warn('[AutoUpdater] Initial check error:', err.message);
+      });
+    }, 6000);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('before-quit', () => {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+    miniPlayerWindow.close();
+    miniPlayerWindow = null;
+  }
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

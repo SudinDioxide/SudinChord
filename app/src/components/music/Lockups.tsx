@@ -44,7 +44,7 @@ function Byline({ item }: { item: MusicItem }) {
 function PlayPlatter({ item }: { item: MusicItem }) {
   return (
     <button
-      className="pointer-events-auto absolute bottom-2.5 left-2.5 grid size-[30px] place-items-center rounded-full bg-thin-material text-white [backdrop-filter:saturate(180%)_blur(60px)] hover:bg-key-bg"
+      className="pointer-events-auto absolute bottom-2.5 left-2.5 grid size-[32px] place-items-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-110 hover:bg-white hover:text-black"
       aria-label={`Play ${item.title}`}
       onClick={(e) => {
         e.preventDefault();
@@ -61,7 +61,7 @@ function PlayPlatter({ item }: { item: MusicItem }) {
 function LockupArtwork({ item, width, aspect }: { item: MusicItem; width: number; aspect: number }) {
   const href = hrefFor(item);
   return (
-    <div className="group/art relative rounded-artwork-md">
+    <div className="group/art relative rounded-artwork-md transition-all duration-300 hover:scale-[1.025] hover:shadow-xl hover:shadow-black/50">
       <Artwork src={item.thumbnail} displayWidth={width} aspect={aspect} radius="var(--radius-artwork-medium)" />
       {href ? (
         <PrefetchLink to={href} className={overlayLink} aria-label={item.title} />
@@ -69,14 +69,14 @@ function LockupArtwork({ item, width, aspect }: { item: MusicItem; width: number
         <button className={overlayLink} aria-label={`Play ${item.title}`} onClick={() => playTrack(item)} />
       )}
       {/* Hover scrim and platter (report §2: --lockupHoverBGColor, opacity .1s ease-in). */}
-      <div className="pointer-events-none absolute inset-0 z-2 rounded-[inherit] bg-lockup-hover opacity-0 transition-opacity duration-100 ease-in group-focus-visible/art:opacity-100 group-hover/art:opacity-100">{isPlayable(item) && <PlayPlatter item={item} />}</div>
+      <div className="pointer-events-none absolute inset-0 z-2 rounded-[inherit] bg-lockup-hover opacity-0 transition-opacity duration-150 ease-in group-focus-visible/art:opacity-100 group-hover/art:opacity-100">{isPlayable(item) && <PlayPlatter item={item} />}</div>
       {/* The track menu (report §14) for playable items: top-right, the
           platter's counterpart in the same glass, revealed with the scrim
           and held visible while its menu is open. */}
       {isPlayable(item) && (
         <TrackMenu
           track={toTrack(item)}
-          className="absolute top-2 right-2 z-3 grid size-7 place-items-center rounded-full bg-thin-material text-white opacity-0 transition-opacity duration-100 ease-in [backdrop-filter:saturate(180%)_blur(60px)] group-hover/art:opacity-100 focus-visible:opacity-100 hover:bg-key-bg data-open:opacity-100"
+          className="absolute top-2 right-2 z-3 grid size-7 place-items-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-100 ease-in backdrop-blur-md group-hover/art:opacity-100 focus-visible:opacity-100 hover:bg-white/20 data-open:opacity-100"
         />
       )}
     </div>
@@ -138,12 +138,16 @@ export function CircleLockup({ item, width = 160 }: { item: MusicItem; width?: n
 export function TrackLockup({ item, onPlay }: { item: MusicItem; onPlay?: () => void }) {
   const play = onPlay ?? (() => playTrack(item));
   return (
-    // 52px art column (40 + 12 gap), content, menu; 55px tall.
-    <div className="group/track grid h-[55px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 py-[7.5px] pr-3.5 pl-0">
-      <button className="group/art relative w-10 rounded-artwork-sm" aria-label={`Play ${item.title}`} onClick={play}>
+    // 52px art column (40 + 12 gap), content, menu; 55px tall with smooth glass hover
+    <div className="group/track relative grid h-[55px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl px-2 py-[7.5px] transition-all duration-200 hover:bg-white/[0.06] hover:backdrop-blur-xs">
+      <button
+        className="group/art relative w-10 rounded-artwork-sm overflow-hidden transition-all duration-200 group-hover/track:scale-105 group-hover/track:shadow-md group-hover/track:shadow-black/60"
+        aria-label={`Play ${item.title}`}
+        onClick={play}
+      >
         <Artwork src={item.thumbnail} displayWidth={40} radius="var(--radius-artwork-small)" />
         <span
-          className="absolute inset-0 grid place-items-center rounded-[inherit] bg-lockup-hover text-white opacity-0 transition-opacity duration-100 ease-in group-hover/track:opacity-100 group-focus-visible/art:opacity-100"
+          className="absolute inset-0 grid place-items-center rounded-[inherit] bg-black/50 text-white opacity-0 backdrop-blur-xs transition-opacity duration-150 ease-in group-hover/track:opacity-100 group-focus-visible/art:opacity-100"
           aria-hidden="true"
         >
           <PlayIcon size={16} />
@@ -151,12 +155,12 @@ export function TrackLockup({ item, onPlay }: { item: MusicItem; onPlay?: () => 
       </button>
       <div className="flex min-w-0 flex-col gap-px px-1">
         <div className="flex min-w-0 items-center type-body">
-          <button className="min-w-0 truncate text-left" onClick={play}>
+          <button className="min-w-0 truncate text-left transition-colors duration-150 group-hover/track:text-white" onClick={play}>
             {item.title}
           </button>
           {item.explicit && <ExplicitBadge />}
         </div>
-        <div className="truncate type-callout text-secondary">
+        <div className="truncate type-callout text-secondary transition-colors duration-150 group-hover/track:text-secondary/90">
           <Byline item={item} />
         </div>
       </div>
@@ -166,7 +170,7 @@ export function TrackLockup({ item, onPlay }: { item: MusicItem; onPlay?: () => 
       {isPlayable(item) && (
         <TrackMenu
           track={toTrack(item)}
-          className="grid size-7 place-items-center rounded-full text-key opacity-0 transition-opacity duration-100 ease-in group-hover/track:opacity-100 focus-visible:opacity-100 hover:bg-quinary data-open:opacity-100"
+          className="grid size-7 place-items-center rounded-full text-key opacity-0 transition-opacity duration-100 ease-in group-hover/track:opacity-100 focus-visible:opacity-100 hover:bg-white/10 data-open:opacity-100"
         />
       )}
     </div>

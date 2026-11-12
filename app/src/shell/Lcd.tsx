@@ -1,4 +1,6 @@
 import { Maximize2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { useArtworkAccent } from '@/lib/artworkAccent';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { LogoMark } from '@/components/icons/LogoMark';
@@ -196,6 +198,10 @@ const time =
  */
 function Progress() {
   const { bar, elapsed, remaining, dragging, handlers } = useScrubber();
+  const artworkUrl = usePlayer((s) => s.nowPlaying?.artworkUrl ?? null);
+  const isPlaying = usePlayer((s) => s.status === 'playing');
+  const accent = useArtworkAccent(artworkUrl);
+
   return (
     // The hit area: taller than the 2px line it carries.
     <div
@@ -211,7 +217,14 @@ function Progress() {
         aria-hidden="true"
       >
         <MixWindowHighlight />
-        <div ref={bar} className="relative size-full origin-left scale-x-(--progress) bg-secondary [--progress:0]" />
+        <div
+          ref={bar}
+          className="relative size-full origin-left scale-x-(--progress) [--progress:0] transition-[background,box-shadow] duration-300"
+          style={{
+            background: `linear-gradient(90deg, rgba(255, 255, 255, 0.75) 0%, ${accent.primary} 100%)`,
+            boxShadow: isPlaying ? `0 0 8px ${accent.glow}` : undefined,
+          }}
+        />
       </div>
     </div>
   );

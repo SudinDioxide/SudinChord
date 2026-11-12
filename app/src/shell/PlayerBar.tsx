@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { PictureInPicture2 } from 'lucide-react';
+import { SleepTimerButton } from '@/components/music/SleepTimerButton';
 import {
   BackwardIcon,
   ForwardIcon,
@@ -106,6 +108,18 @@ export function PlayerBar() {
           >
             <UpNextIcon size={18} />
           </button>
+          <button
+            className={fading}
+            aria-label="Mini Player (Ctrl+Alt+M)"
+            title="Mini Player (Ctrl+Alt+M)"
+            onClick={() => {
+              const ep = (window as unknown as { electronPlatform?: { toggleMiniPlayer?: (opts?: { minimizeMain?: boolean }) => void } }).electronPlatform;
+              ep?.toggleMiniPlayer?.({ minimizeMain: true });
+            }}
+          >
+            <PictureInPicture2 size={18} strokeWidth={2.2} />
+          </button>
+          <SleepTimerButton className={fading} placement="above-end" />
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} className={action} />
         </div>
       </div>

@@ -473,6 +473,108 @@ async function canvas(trackId) {
   return parseCanvas(await gql('canvas', { trackUri: `spotify:track:${trackId}` }));
 }
 
+async function createPlaylist(name, description = '', isPublic = false) {
+  const tok = await accessToken();
+  const clientTok = await clientToken(tok.clientId).catch(() => null);
+
+  let userId = null;
+  try {
+    const prof = await gql('profileAttributes', {});
+    userId = path(prof, 'data', 'me', 'profile', 'username') || path(prof, 'data', 'me', 'profile', 'id');
+  } catch (e) {
+    console.warn('[Spotify] Could not fetch profile username:', e.message);
+  }
+
+  const endpoints = [
+    userId ? `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists` : null,
+    'https://api.spotify.com/v1/me/playlists',
+  ].filter(Boolean);
+
+  const headers = {
+    Authorization: `Bearer ${tok.token}`,
+    'User-Agent': CHROME_UA,
+    Accept: 'application/json',
+    'Content-Type': 'application/json;charset=UTF-8',
+    'App-Platform': 'WebPlayer',
+    ...(clientTok && { 'Client-Token': clientTok }),
+  };
+
+  const body = JSON.stringify({
+    name,
+    description,
+    public: isPublic,
+  });
+
+  let lastError = null;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        return {
+          id: json.id,
+          name: json.name,
+          uri: json.uri,
+        };
+      }
+
+      const text = await res.text();
+      let msg = text;
+      try {
+        const parsed = JSON.parse(text);
+        msg = parsed.error?.message || text;
+      } catch {}
+
+      lastError = new Error(`Spotify playlist creation failed (${res.status}): ${msg}`);
+      if (res.status === 429) {
+        break;
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Spotify playlist creation failed');
+}
+
+async function addToPlaylist(playlistId, uris = []) {
+  const tok = await accessToken();
+  const clientTok = await clientToken(tok.clientId).catch(() => null);
+
+  const headers = {
+    Authorization: `Bearer ${tok.token}`,
+    'User-Agent': CHROME_UA,
+    Accept: 'application/json',
+    'Content-Type': 'application/json;charset=UTF-8',
+    'App-Platform': 'WebPlayer',
+    ...(clientTok && { 'Client-Token': clientTok }),
+  };
+
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      uris,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const parsed = JSON.parse(text);
+      msg = parsed.error?.message || text;
+    } catch {}
+    throw new Error(`Spotify add to playlist failed (${res.status}): ${msg}`);
+  }
+  return await res.json();
+}
+
 async function getAuthState() {
   const spDc = await getSpotifyCookie();
   const browserSignedIn = spDc !== null;
@@ -585,4 +687,6 @@ module.exports = {
   playlistInfo,
   searchTracks,
   canvas,
+  createPlaylist,
+  addToPlaylist,
 };
