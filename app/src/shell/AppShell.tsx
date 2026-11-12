@@ -156,7 +156,6 @@ export function AppShell() {
         <PlayerBar />
         <SidePanel />
         <NewPlaylistModal />
-        <EqualizerModal />
       </div>
       {updateInfo ? (
         <Banner
@@ -193,6 +192,7 @@ export function AppShell() {
           <FullScreenPlayer />
         </Suspense>
       )}
+      <EqualizerModal />
     </div>
   );
 }

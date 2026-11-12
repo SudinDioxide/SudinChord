@@ -85,3 +85,4 @@ export function AudioSpectrumVisualizer({ className = 'h-6 w-28', bars = 16, hei
     />
   );
 }
+

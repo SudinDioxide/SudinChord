@@ -161,3 +161,4 @@ export function syncAudioGraph() {
     compressor.threshold.value = normalization ? -24 : 0;
   }
 }
+
