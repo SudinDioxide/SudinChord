@@ -198,29 +198,29 @@ export function EqualizerModal() {
           {/* Y-Axis Guidelines & Scale */}
           <div className="pointer-events-none absolute left-3 right-3 top-7 bottom-10 flex flex-col justify-between">
             <div className="flex items-center w-full">
-              <span className="w-8 text-[9px] font-mono text-white/30">+12dB</span>
+              <span className="w-11 text-[9px] font-mono text-white/35 text-left">+12dB</span>
               <div className="flex-1 border-b border-white/[0.06]" />
             </div>
             <div className="flex items-center w-full">
-              <span className="w-8 text-[9px] font-mono text-white/30">+6dB</span>
+              <span className="w-11 text-[9px] font-mono text-white/35 text-left">+6dB</span>
               <div className="flex-1 border-b border-white/[0.04]" />
             </div>
             <div className="flex items-center w-full">
-              <span className="w-8 text-[9px] font-mono font-semibold text-white/50">0dB</span>
+              <span className="w-11 text-[9px] font-mono font-semibold text-white/60 text-left">0dB</span>
               <div className="flex-1 border-b border-white/20" />
             </div>
             <div className="flex items-center w-full">
-              <span className="w-8 text-[9px] font-mono text-white/30">-6dB</span>
+              <span className="w-11 text-[9px] font-mono text-white/35 text-left">-6dB</span>
               <div className="flex-1 border-b border-white/[0.04]" />
             </div>
             <div className="flex items-center w-full">
-              <span className="w-8 text-[9px] font-mono text-white/30">-12dB</span>
+              <span className="w-11 text-[9px] font-mono text-white/35 text-left">-12dB</span>
               <div className="flex-1 border-b border-white/[0.06]" />
             </div>
           </div>
 
           {/* 10 Vertical Fader Columns */}
-          <div className="relative z-1 flex items-stretch justify-between h-52 pl-9 pr-1 gap-1">
+          <div className="relative z-1 flex items-stretch justify-between h-52 pl-12 pr-2 gap-1.5">
             {EQ_FREQUENCIES.map((freq, i) => {
               const gain = bands[i] ?? 0;
               const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;

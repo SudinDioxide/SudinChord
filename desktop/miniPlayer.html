@@ -410,7 +410,7 @@
 
     .lyrics-header {
       -webkit-app-region: drag;
-      height: 24px;
+      height: 26px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -421,6 +421,45 @@
       letter-spacing: 0.6px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       flex-shrink: 0;
+    }
+
+    .lyrics-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lyrics-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      -webkit-app-region: no-drag;
+    }
+
+    .lyric-toggle-btn {
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1.5px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .lyric-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .lyric-toggle-btn.active {
+      background: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     }
 
     .lyrics-badge {
@@ -461,12 +500,37 @@
 
     /* Lyric Line Base Style */
     .lyric-line {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      user-select: none;
+      transform-origin: left center;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .lyric-main {
       font-size: 13px;
       font-weight: 500;
       color: #9ca3af;
-      line-height: 1.5;
-      transform-origin: left center;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      line-height: 1.45;
+    }
+
+    .lyric-sub {
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.35;
+      margin-top: 1px;
+    }
+
+    .lyric-roman {
+      color: rgba(255, 255, 255, 0.65);
+      font-style: italic;
+    }
+
+    .lyric-trans {
+      color: rgba(147, 197, 253, 0.85);
     }
 
     /* ONLY SYNCED LYRICS: Interactive Hover, Click-to-seek & Duration Tracking */
@@ -477,24 +541,46 @@
 
     .player-card.is-synced-lyrics .lyric-line:hover {
       opacity: 0.85;
+    }
+
+    .player-card.is-synced-lyrics .lyric-line:hover .lyric-main {
       color: #fff;
     }
 
     .player-card.is-synced-lyrics .lyric-line.active {
+      opacity: 1 !important;
+      transform: scale(1.02);
+    }
+
+    .player-card.is-synced-lyrics .lyric-line.active .lyric-main {
       color: #ffffff;
       font-size: 14.5px;
       font-weight: 700;
-      opacity: 1;
-      transform: scale(1.03);
-      text-shadow: 0 0 16px rgba(255, 255, 255, 0.45);
+      text-shadow: 0 0 16px rgba(255, 255, 255, 0.5);
+    }
+
+    .player-card.is-synced-lyrics .lyric-line.active .lyric-roman {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+
+    .player-card.is-synced-lyrics .lyric-line.active .lyric-trans {
+      color: #93c5fd;
+      font-size: 11.5px;
+      font-weight: 600;
+      text-shadow: 0 0 12px rgba(147, 197, 253, 0.4);
     }
 
     /* PLAIN LYRICS: Static Readable Text - NO seek on click, NO duration sync highlight */
     .player-card:not(.is-synced-lyrics) .lyric-line {
       cursor: default;
       opacity: 0.85;
-      color: #d1d5db;
       user-select: text;
+    }
+
+    .player-card:not(.is-synced-lyrics) .lyric-main {
+      color: #d1d5db;
     }
 
     .lyrics-empty {
@@ -645,8 +731,14 @@
     <!-- Dropdown Lyrics Panel -->
     <div class="lyrics-panel" id="lyricsPanel">
       <div class="lyrics-header">
-        <span>LYRICS</span>
-        <span class="lyrics-badge" id="lyricsBadge">NOT SYNCED</span>
+        <div class="lyrics-header-left">
+          <span>LYRICS</span>
+          <span class="lyrics-badge" id="lyricsBadge">NOT SYNCED</span>
+        </div>
+        <div class="lyrics-header-actions" id="lyricsActions" style="display: none;">
+          <button class="lyric-toggle-btn active" id="btnToggleRoman" title="Toggle Romanized Pronunciation">ROM</button>
+          <button class="lyric-toggle-btn active" id="btnToggleTrans" title="Toggle Translation">TRANS</button>
+        </div>
       </div>
       <div class="lyrics-scroll-area" id="lyricsScroll">
         <div class="lyrics-empty" id="lyricsEmpty">Loading lyrics...</div>
@@ -674,6 +766,12 @@
     const btnShuffle = document.getElementById('btnShuffle');
     const lyricsBadge = document.getElementById('lyricsBadge');
     const lyricsScroll = document.getElementById('lyricsScroll');
+    const lyricsActions = document.getElementById('lyricsActions');
+    const btnToggleRoman = document.getElementById('btnToggleRoman');
+    const btnToggleTrans = document.getElementById('btnToggleTrans');
+
+    let showRomanization = true;
+    let showTranslation = true;
 
     let isPinned = true;
     let isPlaying = false;
@@ -893,6 +991,7 @@
         playerCard.classList.remove('is-synced-lyrics');
         lyricsBadge.textContent = 'LOADING';
         lyricsBadge.classList.remove('synced');
+        lyricsActions.style.display = 'none';
         lyricsScroll.innerHTML = '<div class="lyrics-empty">Loading lyrics...</div>';
         return;
       }
@@ -901,6 +1000,7 @@
         playerCard.classList.remove('is-synced-lyrics');
         lyricsBadge.textContent = 'NO LYRICS';
         lyricsBadge.classList.remove('synced');
+        lyricsActions.style.display = 'none';
         lyricsScroll.innerHTML = '<div class="lyrics-empty">No lyrics available for this track</div>';
         return;
       }
@@ -915,8 +1015,30 @@
         lyricsBadge.classList.remove('synced');
       }
 
+      const hasRoman = Boolean(lyrics.lines.some(l => l.romanized && l.romanized.trim()));
+      const hasTrans = Boolean(lyrics.lines.some(l => l.translation && l.translation.trim()));
+
+      if (hasRoman || hasTrans) {
+        lyricsActions.style.display = 'flex';
+        btnToggleRoman.style.display = hasRoman ? 'inline-block' : 'none';
+        btnToggleTrans.style.display = hasTrans ? 'inline-block' : 'none';
+        btnToggleRoman.classList.toggle('active', showRomanization);
+        btnToggleTrans.classList.toggle('active', showTranslation);
+      } else {
+        lyricsActions.style.display = 'none';
+      }
+
       lyricsScroll.innerHTML = lyrics.lines
-        .map((l, idx) => `<div class="lyric-line" id="lyric-${idx}" data-time="${l.timeMs || 0}">${escapeHtml(l.text)}</div>`)
+        .map((l, idx) => {
+          const mainHtml = `<div class="lyric-main">${escapeHtml(l.text)}</div>`;
+          const romanHtml = (showRomanization && l.romanized && l.romanized.trim())
+            ? `<div class="lyric-sub lyric-roman">${escapeHtml(l.romanized)}</div>`
+            : '';
+          const transHtml = (showTranslation && l.translation && l.translation.trim())
+            ? `<div class="lyric-sub lyric-trans">${escapeHtml(l.translation)}</div>`
+            : '';
+          return `<div class="lyric-line" id="lyric-${idx}" data-time="${l.timeMs || 0}">${mainHtml}${romanHtml}${transHtml}</div>`;
+        })
         .join('');
 
       // ONLY add click-to-seek listeners if lyrics are SYNCED
@@ -983,6 +1105,22 @@
           setTimeout(() => syncLyricsPosition(currentPositionSec), 150);
         }
       }
+    });
+
+    btnToggleRoman.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRomanization = !showRomanization;
+      btnToggleRoman.classList.toggle('active', showRomanization);
+      if (currentLyrics) renderLyrics(currentLyrics);
+      if (currentPositionSec > 0) syncLyricsPosition(currentPositionSec);
+    });
+
+    btnToggleTrans.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showTranslation = !showTranslation;
+      btnToggleTrans.classList.toggle('active', showTranslation);
+      if (currentLyrics) renderLyrics(currentLyrics);
+      if (currentPositionSec > 0) syncLyricsPosition(currentPositionSec);
     });
 
     // 5. Interactive Scrubber Seek (Click & Drag)

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { getPlayhead, usePlayer, type NowPlaying } from '@/state/player';
 import { useVideo } from '@/state/video';
 import { lookupLyrics } from '@/lyrics/repository';
+import { romajiOf } from '@/data/match/trackMatcher';
 import { initMiniPlayerStream } from './miniPlayerStream';
 
 interface ElectronPlatform {
@@ -24,7 +25,7 @@ interface ElectronPlatform {
     videoId: string;
     synced: boolean;
     loading?: boolean;
-    lines: { timeMs: number; text: string }[];
+    lines: { timeMs: number; text: string; romanized?: string; translation?: string }[];
   }) => void;
   onMediaCommand?: (callback: (cmd: string, data?: unknown) => void) => () => void;
   toggleMiniPlayer?: () => void;
@@ -62,7 +63,16 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
           ep.sendLyrics({
             videoId: nowPlaying.videoId,
             synced: parsedLines.some((l) => l.timeMs > 0),
-            lines: parsedLines.map((l) => ({ timeMs: l.timeMs, text: l.text })),
+            lines: parsedLines.map((l) => {
+              const isKana = /[\u3040-\u30ff]/.test(l.text);
+              const romanized = l.romanized || (isKana ? romajiOf(l.text) : undefined);
+              return {
+                timeMs: l.timeMs,
+                text: l.text,
+                romanized,
+                translation: l.translation || undefined,
+              };
+            }),
           });
           return;
         }
@@ -82,7 +92,16 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
       ep.sendLyrics({
         videoId: nowPlaying.videoId,
         synced: result.synced,
-        lines: result.lines.map((l) => ({ timeMs: l.timeMs, text: l.text })),
+        lines: result.lines.map((l) => {
+          const isKana = /[\u3040-\u30ff]/.test(l.text);
+          const romanized = l.romanized || (isKana ? romajiOf(l.text) : undefined);
+          return {
+            timeMs: l.timeMs,
+            text: l.text,
+            romanized,
+            translation: l.translation || undefined,
+          };
+        }),
       });
     } else {
       ep.sendLyrics({
