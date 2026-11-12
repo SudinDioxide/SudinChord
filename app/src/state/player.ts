@@ -135,6 +135,63 @@ function saveSettings(state: Settings) {
   );
 }
 
+const LAST_SESSION_KEY = 'sudinchord:last-session:v1';
+
+interface SavedSession {
+  nowPlaying: NowPlaying;
+  queue: QueueEntry[];
+  index: number;
+}
+
+function loadLastSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(LAST_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedSession;
+    if (parsed && parsed.nowPlaying && typeof parsed.nowPlaying.videoId === 'string' && Array.isArray(parsed.queue)) {
+      return parsed;
+    }
+  } catch {
+    // Ignore parse error
+  }
+  return null;
+}
+
+function saveLastSession() {
+  try {
+    const { nowPlaying, queue, index } = usePlayer.getState();
+    if (!nowPlaying) return;
+    const startIdx = Math.max(0, index - 10);
+    const endIdx = Math.min(queue.length, index + 40);
+    const slicedQueue = queue.slice(startIdx, endIdx);
+    const adjustedIndex = index - startIdx;
+
+    const payload: SavedSession = {
+      nowPlaying: {
+        videoId: nowPlaying.videoId,
+        title: nowPlaying.title,
+        artist: nowPlaying.artist,
+        artworkUrl: nowPlaying.artworkUrl,
+        durationSec: nowPlaying.durationSec,
+        streamInfo: null,
+        stream: null,
+      },
+      queue: slicedQueue,
+      index: Math.max(0, adjustedIndex),
+    };
+
+    localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    saveLastSession();
+  });
+}
+
 // ---- Decks: two engines, so a crossfade can play the next track under this one ------------
 
 interface Deck {
@@ -435,12 +492,14 @@ let loadToken = 0;
 /** Canonical positions of the queue before shuffle, for turning it off again. */
 let canonical: Map<string, number> | null = null;
 
+const lastSession = loadLastSession();
+
 export const usePlayer = create<PlayerState>()((set, get) => ({
   ...loadSettings(),
-  queue: [],
-  index: -1,
-  nowPlaying: null,
-  status: 'idle',
+  queue: lastSession?.queue ?? [],
+  index: lastSession ? lastSession.index : -1,
+  nowPlaying: lastSession?.nowPlaying ?? null,
+  status: lastSession?.nowPlaying ? 'paused' : 'idle',
   error: null,
   deck: 0,
   automixState: null,
@@ -557,8 +616,8 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     if (resuming) void graph?.ctx.resume();
     // A listener in a party the host has locked: the press moves this device alone.
     if (partyHooks?.onLockedTransport(resuming)) return;
-    if (!audio || status === 'error') {
-      // A stopped or failed track starts again from where it was.
+    if (!audio || !audio.src || audio.currentSrc === '' || status === 'error' || (audio.paused && audio.readyState === 0)) {
+      // A stopped, restored, or failed track starts again from where it was.
       void startAt(index, { startSec: audio?.currentTime ?? 0 });
     } else if (audio.paused) {
       // In a party, a resume waits for the instant the server schedules for everyone.
@@ -999,6 +1058,7 @@ function applyTrack(track: LoadedTrack, from?: Track) {
   usePlayer.setState({ nowPlaying, error: null });
   updateMediaSession(nowPlaying);
   followVideo();
+  saveLastSession();
 }
 
 /** A music video's picture follows the deck in front (playback/youtube/videoDeck.ts, loaded with the engine). */
