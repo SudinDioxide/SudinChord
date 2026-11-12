@@ -2,6 +2,61 @@ import { useState, useRef } from 'react';
 import { useAudioFx, EQ_FREQUENCIES, EQ_PRESETS } from '@/state/audioFx';
 import { X, Sliders, Volume2, RotateCcw, ChevronDown, Check } from 'lucide-react';
 
+function AppleToggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        width: '40px',
+        height: '24px',
+        padding: '2px',
+        borderRadius: '9999px',
+        backgroundColor: checked ? '#34c759' : 'rgba(255, 255, 255, 0.16)',
+        border: 'none',
+        outline: 'none',
+        cursor: 'pointer',
+        boxSizing: 'border-box',
+        transition: 'background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease',
+        boxShadow: checked ? '0 0 10px rgba(52, 199, 89, 0.45)' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.12)',
+        flexShrink: 0,
+        userSelect: 'none',
+        verticalAlign: 'middle',
+      }}
+    >
+      <span
+        style={{
+          display: 'block',
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          backgroundColor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.35), 0 0 1px rgba(0, 0, 0, 0.2)',
+          transform: checked ? 'translateX(16px)' : 'translateX(0px)',
+          transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: 'none',
+          boxSizing: 'border-box',
+          flexShrink: 0,
+        }}
+      />
+    </button>
+  );
+}
+
 export function EqualizerModal() {
   const {
     eqEnabled,
@@ -93,28 +148,11 @@ export function EqualizerModal() {
 
           <div className="flex items-center gap-4">
             {/* Master EQ Switch */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <span className={`text-xs font-semibold tracking-wide transition-colors ${eqEnabled ? 'text-white' : 'text-white/50'}`}>
                 EQ
               </span>
-              <button
-                type="button"
-                role="switch"
-                aria-label="Toggle Equalizer"
-                aria-checked={eqEnabled}
-                onClick={() => setEqEnabled(!eqEnabled)}
-                className={`relative h-5 w-9 rounded-full p-[2px] cursor-pointer transition-all duration-200 ease-out ${
-                  eqEnabled
-                    ? 'bg-[#fa233b] shadow-[0_0_12px_rgba(250,35,59,0.45)]'
-                    : 'bg-white/15 hover:bg-white/20 border border-white/10'
-                }`}
-              >
-                <span
-                  className={`block size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ease-out ${
-                    eqEnabled ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <AppleToggle checked={eqEnabled} onChange={setEqEnabled} label="Toggle Equalizer" />
             </div>
 
             <button
@@ -176,24 +214,7 @@ export function EqualizerModal() {
           <div className="flex items-center gap-2.5 rounded-[12px] bg-white/[0.05] border border-white/10 px-3 h-8">
             <Volume2 size={14} className={normalization ? 'text-white' : 'text-white/50'} />
             <span className="text-xs text-white/80 font-medium">Loudness Normalizer</span>
-            <button
-              type="button"
-              role="switch"
-              aria-label="Toggle Loudness Normalizer"
-              aria-checked={normalization}
-              onClick={() => setNormalization(!normalization)}
-              className={`relative h-5 w-9 rounded-full p-[2px] cursor-pointer transition-all duration-200 ease-out ${
-                normalization
-                  ? 'bg-[#fa233b] shadow-[0_0_12px_rgba(250,35,59,0.45)]'
-                  : 'bg-white/15 hover:bg-white/20 border border-white/10'
-              }`}
-            >
-              <span
-                className={`block size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ease-out ${
-                  normalization ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <AppleToggle checked={normalization} onChange={setNormalization} label="Toggle Loudness Normalizer" />
           </div>
         </div>
 
