@@ -140,6 +140,14 @@ async function extractMetadata(filePath) {
           if (ms > 0) result.durationSec = Math.round(ms / 1000);
         } else if (frameId === 'APIC') {
           result.hasArtwork = true;
+        } else if (frameId === 'USLT' || frameId === 'SYLT') {
+          try {
+            let textStart = 4;
+            while (textStart < frameData.length && frameData[textStart] !== 0) textStart++;
+            if (textStart < frameData.length) textStart++;
+            const lyr = decodeText(frameData.subarray(textStart), enc);
+            if (lyr && !result.lyrics) result.lyrics = lyr;
+          } catch {}
         }
 
         p += frameSize;
@@ -184,6 +192,8 @@ async function extractMetadata(filePath) {
           if (tags.TITLE) result.title = tags.TITLE;
           if (tags.ARTIST) result.artist = tags.ARTIST;
           if (tags.ALBUM) result.album = tags.ALBUM;
+          if (tags.LYRICS && !result.lyrics) result.lyrics = tags.LYRICS;
+          if (tags.UNSYNCEDLYRICS && !result.lyrics) result.lyrics = tags.UNSYNCEDLYRICS;
         } else if (blockType === 6) {
           // PICTURE
           result.hasArtwork = true;
@@ -257,6 +267,18 @@ async function extractMetadata(filePath) {
       }
     } catch {}
   }
+
+  // Check for companion .lrc or .ttml files in the same directory
+  try {
+    const parsedPath = path.parse(filePath);
+    const lrcPath = path.join(parsedPath.dir, `${parsedPath.name}.lrc`);
+    const ttmlPath = path.join(parsedPath.dir, `${parsedPath.name}.ttml`);
+    if (fs.existsSync(lrcPath)) {
+      result.lyrics = await fs.promises.readFile(lrcPath, 'utf8');
+    } else if (fs.existsSync(ttmlPath)) {
+      result.lyrics = await fs.promises.readFile(ttmlPath, 'utf8');
+    }
+  } catch {}
 
   return result;
 }

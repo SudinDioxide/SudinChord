@@ -1,4 +1,6 @@
-import { Maximize, Minimize, PictureInPicture2, X } from 'lucide-react';
+import { Maximize, Minimize, PictureInPicture2, SlidersHorizontal, X } from 'lucide-react';
+import { useAudioFx } from '@/state/audioFx';
+import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
 import {
@@ -396,6 +398,14 @@ export function FullScreenPlayer() {
       <div className={`absolute top-12 right-5 z-1 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}>
         {video && <VideoQuality />}
         <VisualizerButton className={chromeButton} placement="below-end" />
+        <button
+          className={chromeButton}
+          aria-label="Equalizer & Audio FX"
+          title="Equalizer & Audio FX"
+          onClick={() => useAudioFx.getState().setModalOpen(true)}
+        >
+          <SlidersHorizontal size={18} strokeWidth={2.2} />
+        </button>
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
           className={chromeButton}
@@ -541,6 +551,7 @@ export function FullScreenPlayer() {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setVolumeOpen(false);
         }}
       >
+        <AudioSpectrumVisualizer className="h-5 w-24 mr-2 opacity-70" />
         <button
           className={`${chromeButton} ${fadeForVolume} aria-pressed:text-primary`}
           aria-label="Up Next"

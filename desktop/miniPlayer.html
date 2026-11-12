@@ -12,6 +12,11 @@
       -webkit-user-drag: none;
     }
 
+    :root {
+      --accent-rgb: 99, 102, 241;
+      --card-opacity: 1;
+    }
+
     html, body {
       width: 100%;
       height: 100%;
@@ -24,28 +29,59 @@
       color: #f3f4f6;
     }
 
-    /* Main Glassmorphic Card Container - Strict NO white borders or outlines */
+    /* Main Glassmorphic Card Container - Dynamic Gradient & Opacity */
     .player-card {
       position: relative;
       width: 100%;
       height: 100%;
       border-radius: 18px;
       overflow: hidden;
-      background: rgba(16, 20, 30, 0.94);
+      background: radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb), 0.22) 0%, rgba(14, 18, 27, 0.94) 80%);
+      opacity: var(--card-opacity);
       backdrop-filter: blur(40px) saturate(210%);
       -webkit-backdrop-filter: blur(40px) saturate(210%);
-      border: none !important;
+      border: 1px solid rgba(var(--accent-rgb), 0.22) !important;
       outline: none !important;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
       display: flex;
       flex-direction: column;
-      transition: box-shadow 0.25s, background 0.3s;
+      transition: box-shadow 0.25s, background 0.6s ease, border-color 0.6s ease, opacity 0.25s ease;
     }
 
     .player-card:hover {
       box-shadow: 
         0 20px 48px rgba(0, 0, 0, 0.8),
-        0 0 16px rgba(255, 0, 51, 0.14);
+        0 0 20px rgba(var(--accent-rgb), 0.22);
+    }
+
+    .volume-hud {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: rgba(10, 12, 18, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 20px;
+      padding: 6px 14px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+    }
+
+    .volume-hud.visible {
+      opacity: 1 !important;
+      transform: translate(-50%, -50%) scale(1);
     }
 
     /* Media Area (holds Video, Header, Controls, Timeline) */
@@ -495,6 +531,14 @@
             </svg>
           </button>
 
+          <!-- Opacity Toggle -->
+          <button class="icon-btn" id="btnOpacity" title="Cycle Opacity (100% / 80% / 60% / 40%)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path>
+            </svg>
+          </button>
+
           <!-- Always on Top Pin -->
           <button class="icon-btn active" id="btnPin" title="Toggle Always on Top">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
@@ -521,6 +565,16 @@
             </svg>
           </button>
         </div>
+      </div>
+
+      <!-- Volume HUD Toast Indicator -->
+      <div id="volumeHud" class="volume-hud">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+        <span id="volumeHudText">100%</span>
       </div>
 
       <!-- Main Player Controls Area -->
@@ -782,9 +836,14 @@
         artworkEl.src = state.artworkUrl;
         artworkEl.style.display = 'block';
         artworkFallbackEl.style.display = 'none';
+        sampleColorAndApply(state.artworkUrl);
       } else {
         artworkEl.style.display = 'none';
         artworkFallbackEl.style.display = 'grid';
+      }
+
+      if (typeof state.volume === 'number') {
+        currentVolume = state.volume;
       }
 
       isPlaying = state.playing;
@@ -984,6 +1043,75 @@
       btnPin.classList.toggle('active', isPinned);
       ipcRenderer.send('miniplayer:toggle-pin', isPinned);
     });
+
+    // 7. Opacity Toggle
+    const opacities = [1, 0.82, 0.62, 0.42];
+    let opacityIdx = 0;
+    const btnOpacity = document.getElementById('btnOpacity');
+    btnOpacity.addEventListener('click', () => {
+      opacityIdx = (opacityIdx + 1) % opacities.length;
+      const targetOpacity = opacities[opacityIdx];
+      document.documentElement.style.setProperty('--card-opacity', targetOpacity);
+      showVolumeHud(`${Math.round(targetOpacity * 100)}% Opacity`);
+    });
+
+    // 8. Mouse Wheel Volume Control & HUD
+    const volumeHud = document.getElementById('volumeHud');
+    const volumeHudText = document.getElementById('volumeHudText');
+    let volumeHudTimer = null;
+
+    function showVolumeHud(text) {
+      volumeHudText.textContent = text;
+      volumeHud.classList.add('visible');
+      clearTimeout(volumeHudTimer);
+      volumeHudTimer = setTimeout(() => {
+        volumeHud.classList.remove('visible');
+      }, 1300);
+    }
+
+    let currentVolume = 1;
+    window.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const up = e.deltaY < 0;
+      ipcRenderer.send('miniplayer:command', up ? 'volumeUp' : 'volumeDown');
+      if (up) currentVolume = Math.min(1, currentVolume + 0.05);
+      else currentVolume = Math.max(0, currentVolume - 0.05);
+      showVolumeHud(`🔊 ${Math.round(currentVolume * 100)}%`);
+    }, { passive: false });
+
+    // 9. Dynamic Accent Color Extraction
+    let lastSampledUrl = '';
+    function sampleColorAndApply(imgUrl) {
+      if (!imgUrl || imgUrl === lastSampledUrl) return;
+      lastSampledUrl = imgUrl;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const cvs = document.createElement('canvas');
+          cvs.width = 16; cvs.height = 16;
+          const ctx = cvs.getContext('2d');
+          ctx.drawImage(img, 0, 0, 16, 16);
+          const data = ctx.getImageData(0, 0, 16, 16).data;
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            const max = Math.max(data[i], data[i+1], data[i+2]);
+            const min = Math.min(data[i], data[i+1], data[i+2]);
+            if (max > 45 && min < 225) {
+              r += data[i]; g += data[i+1]; b += data[i+2];
+              count++;
+            }
+          }
+          if (count > 0) {
+            r = Math.round(r / count);
+            g = Math.round(g / count);
+            b = Math.round(b / count);
+            document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+          }
+        } catch {}
+      };
+      img.src = imgUrl;
+    }
 
     // DevTools inspection shortcut
     window.addEventListener('keydown', (e) => {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, nativeTheme, shell, dialog, protocol, net, globalShortcut, nativeImage } = require('electron');
+const { app, BrowserWindow, session, ipcMain, nativeTheme, shell, dialog, protocol, net, globalShortcut, nativeImage, Tray, Menu } = require('electron');
 let autoUpdater = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
@@ -764,7 +764,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: '#00000000',
-    backgroundMaterial: process.platform === 'win32' ? 'acrylic' : undefined,
+    backgroundMaterial: process.platform === 'win32' ? 'mica' : undefined,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -814,7 +814,12 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      return;
+    }
     if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
       miniPlayerWindow.destroy();
       miniPlayerWindow = null;
@@ -823,11 +828,13 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
-    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
-      miniPlayerWindow.destroy();
-      miniPlayerWindow = null;
+    if (isQuitting) {
+      if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+        miniPlayerWindow.destroy();
+        miniPlayerWindow = null;
+      }
+      app.quit();
     }
-    app.quit();
   });
 }
 
@@ -1034,6 +1041,93 @@ function updateTaskbarThumbnailToolbar(state) {
   } catch (err) { }
 }
 
+let tray = null;
+let isQuitting = false;
+
+function createTray() {
+  if (tray) return;
+  try {
+    const iconPath = fs.existsSync(path.join(__dirname, 'icon.png'))
+      ? path.join(__dirname, 'icon.png')
+      : fs.existsSync(path.join(__dirname, 'icon.ico'))
+        ? path.join(__dirname, 'icon.ico')
+        : path.join(__dirname, '../app/public/favicon.ico');
+
+    if (!fs.existsSync(iconPath)) return;
+    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    tray.setToolTip('SudinChord');
+
+    updateTrayMenu();
+
+    const showAndFocus = () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    };
+
+    tray.on('double-click', showAndFocus);
+    tray.on('click', showAndFocus);
+  } catch (err) {
+    console.warn('[Desktop] Failed to create system tray:', err);
+  }
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  try {
+    const isPlaying = currentMediaState?.playing;
+    const title = currentMediaState?.title
+      ? `${currentMediaState.title} - ${currentMediaState.artist || 'SudinChord'}`
+      : 'SudinChord';
+
+    const contextMenu = Menu.buildFromTemplate([
+      { label: title.length > 36 ? `${title.slice(0, 33)}...` : title, enabled: false },
+      { type: 'separator' },
+      {
+        label: isPlaying ? 'Pause (Ctrl+Alt+Space)' : 'Play (Ctrl+Alt+Space)',
+        click: () => mainWindow?.webContents.send('media:command', isPlaying ? 'pause' : 'play'),
+      },
+      {
+        label: 'Next Track (Ctrl+Alt+Right)',
+        click: () => mainWindow?.webContents.send('media:command', 'next'),
+      },
+      {
+        label: 'Previous Track (Ctrl+Alt+Left)',
+        click: () => mainWindow?.webContents.send('media:command', 'previous'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Mini-Player (Ctrl+Alt+M)',
+        click: () => toggleMiniPlayer(),
+      },
+      {
+        label: 'Open SudinChord',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit SudinChord',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip(currentMediaState?.title ? `SudinChord - ${currentMediaState.title}` : 'SudinChord');
+  } catch (err) { }
+}
+
 let currentLyricsState = null;
 
 function createMiniPlayerWindow() {
@@ -1166,6 +1260,7 @@ ipcMain.on('media:state', (_event, state) => {
     miniPlayerWindow.webContents.send('player:sync', state);
   }
   updateTaskbarThumbnailToolbar(state);
+  updateTrayMenu();
 });
 
 ipcMain.on('window:toggle-mini-player', (_event, options) => {
@@ -1325,6 +1420,7 @@ app.whenReady().then(async () => {
   setupNetworkInterceptors();
   await startLocalServer();
   createWindow();
+  createTray();
   registerGlobalShortcuts();
   setupAutoUpdater();
 
@@ -1342,6 +1438,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
     miniPlayerWindow.close();
     miniPlayerWindow = null;

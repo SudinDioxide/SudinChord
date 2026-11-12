@@ -15,6 +15,8 @@ interface ElectronPlatform {
     status: string;
     playing: boolean;
     shuffle?: boolean;
+    volume?: number;
+    muted?: boolean;
     isVideo?: boolean;
     videoAspect?: number;
   }) => void;
@@ -243,6 +245,8 @@ export function useMediaSession(): void {
           status,
           playing: isPlaying,
           shuffle: state.shuffle,
+          volume: state.volume,
+          muted: state.muted,
           isVideo: hasVideo,
           videoAspect: videoState.aspect || (16 / 9),
         });
@@ -270,6 +274,8 @@ export function useMediaSession(): void {
           status: p.status,
           playing: true,
           shuffle: p.shuffle,
+          volume: p.volume,
+          muted: p.muted,
           isVideo: hasVideo,
           videoAspect: videoState.aspect || (16 / 9),
         });

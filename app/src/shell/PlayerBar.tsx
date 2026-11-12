@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { PictureInPicture2 } from 'lucide-react';
+import { PictureInPicture2, SlidersHorizontal } from 'lucide-react';
+import { useAudioFx } from '@/state/audioFx';
 import { SleepTimerButton } from '@/components/music/SleepTimerButton';
 import {
   BackwardIcon,
@@ -118,6 +119,14 @@ export function PlayerBar() {
             }}
           >
             <PictureInPicture2 size={18} strokeWidth={2.2} />
+          </button>
+          <button
+            className={fading}
+            aria-label="Equalizer & Audio FX"
+            title="Equalizer & Audio FX"
+            onClick={() => useAudioFx.getState().setModalOpen(true)}
+          >
+            <SlidersHorizontal size={18} strokeWidth={2.2} />
           </button>
           <SleepTimerButton className={fading} placement="above-end" />
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} className={action} />

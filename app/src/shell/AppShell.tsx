@@ -19,6 +19,7 @@ import { SidePanel } from './SidePanel';
 import { Sidebar } from './Sidebar';
 import { AmbientAppBackdrop } from './AmbientAppBackdrop';
 import { NewPlaylistModal } from '@/components/music/NewPlaylistModal';
+import { EqualizerModal } from '@/components/audio/EqualizerModal';
 import { Music2 } from 'lucide-react';
 import { localTracksManager } from '@/playback/local/localTracks';
 import { playList } from '@/components/music/play';
@@ -155,6 +156,7 @@ export function AppShell() {
         <PlayerBar />
         <SidePanel />
         <NewPlaylistModal />
+        <EqualizerModal />
       </div>
       {updateInfo ? (
         <Banner
