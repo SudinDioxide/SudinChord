@@ -306,6 +306,19 @@ export function FullScreenPlayer() {
   // from which provider, is the panel's own business to say.
   const showLyrics = panel === 'lyrics';
   const showQueue = panel === 'queue';
+  // Keep renderedPanel mounted during the 500ms exit transition
+  const [renderedPanel, setRenderedPanel] = useState<'lyrics' | 'queue' | null>(panel);
+  useEffect(() => {
+    if (panel) {
+      setRenderedPanel(panel);
+    } else {
+      const t = setTimeout(() => {
+        setRenderedPanel(null);
+      }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [panel]);
+
   const togglePanel = (p: 'lyrics' | 'queue') => {
     picked.current = true;
     setPanel((on) => (on === p ? null : p));
@@ -391,11 +404,26 @@ export function FullScreenPlayer() {
         </div>
       )}
 
-      <button ref={close} className={`${corner} top-12 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
+      {/* Top window draggable region for frameless desktop Electron */}
+      <div
+        className="pointer-events-auto absolute top-0 left-0 right-[140px] h-12 z-10 select-none"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
+
+      <button
+        ref={close}
+        className={`${corner} top-12 left-5 z-20`}
+        aria-label="Close"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        onClick={() => setFullScreen(false)}
+      >
         <X size={20} />
       </button>
       {/* Top right actions: Video quality, Visualizer, Sleep Timer, PiP, Fullscreen */}
-      <div className={`absolute top-12 right-5 z-1 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}>
+      <div
+        className={`absolute top-12 right-5 z-20 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         {video && <VideoQuality />}
         <VisualizerButton className={chromeButton} placement="below-end" />
         <button
@@ -433,22 +461,20 @@ export function FullScreenPlayer() {
         )}
       </div>
 
-      {/* Apple's grid areas "controls lyrics": the artwork column, then the lyrics. */}
+      {/* Centered layout: Artwork section and smoothly expandable Lyrics / Queue panel */}
       <div
         className={
           theater
             ? `absolute inset-x-0 bottom-0 flex justify-center bg-[linear-gradient(to_top,rgb(0_0_0/0.72),rgb(0_0_0/0.35)_55%,transparent)] px-6 pt-32 pb-16 transition-opacity duration-300${hidden}`
-            : `grid h-full items-center justify-center gap-x-[clamp(32px,5vw,96px)] px-[clamp(20px,5vw,80px)] py-16 max-md:px-6 max-md:pb-18 ${
-                column
-                  ? 'grid-cols-[var(--art)_minmax(0,48vw)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[minmax(0,1fr)_auto] max-md:items-stretch max-md:gap-y-4'
-                  : 'grid-cols-[var(--art)]'
-              }`
+            : 'flex h-full items-center justify-center gap-x-[clamp(32px,5vw,96px)] px-[clamp(20px,5vw,80px)] py-16 max-md:flex-col max-md:px-6 max-md:pb-18'
         }
         data-lyrics={column || undefined}
       >
         <section
           className={
-            theater ? 'flex w-[min(720px,100%)] min-w-0 flex-col' : `flex w-(--art) min-w-0 flex-col${column ? ' max-md:order-2 max-md:w-full' : ''}`
+            theater
+              ? 'flex w-[min(720px,100%)] min-w-0 flex-col'
+              : `flex w-[var(--art)] min-w-0 flex-col flex-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]${column ? ' max-md:order-2 max-md:w-full' : ''}`
           }
           aria-label="Player"
         >
@@ -518,33 +544,46 @@ export function FullScreenPlayer() {
           <AudioVisualizer className="mt-4 w-full rounded-[10px]" height={44} barCount={40} />
         </section>
 
-        {showLyrics && (
-          <section className="flex min-h-0 min-w-0 animate-fade-in self-stretch overflow-visible" aria-label="Lyrics">
-            <LyricsPanel variant="full" />
-          </section>
-        )}
-        {showQueue && (
-          // Up Next in the right-hand column: the side panel's list, laid out as a column.
-          <section
-            className="flex min-h-0 animate-fade-in flex-col self-stretch [mask-image:linear-gradient(180deg,#000_calc(100%-80px),transparent)]"
-            aria-label="Up Next"
+        {renderedPanel && (
+          <div
+            className={`self-stretch flex flex-col min-h-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              column
+                ? 'w-[min(48vw,680px)] max-md:w-full max-md:flex-1 opacity-100 translate-x-0 pointer-events-auto'
+                : 'w-0 max-md:h-0 opacity-0 translate-x-12 pointer-events-none'
+            }`}
           >
-            <UpNext />
-          </section>
+            <div className="w-[min(48vw,680px)] max-md:w-full flex-1 min-h-0 flex flex-col">
+              {renderedPanel === 'lyrics' && (
+                <section className="flex flex-1 min-h-0 min-w-0 self-stretch overflow-visible" aria-label="Lyrics">
+                  <LyricsPanel variant="full" />
+                </section>
+              )}
+              {renderedPanel === 'queue' && (
+                <section
+                  className="flex flex-1 min-h-0 flex-col self-stretch [mask-image:linear-gradient(180deg,#000_calc(100%-80px),transparent)]"
+                  aria-label="Up Next"
+                >
+                  <UpNext />
+                </section>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
       <button
-        className={`${corner} bottom-5 left-5 aria-pressed:text-primary`}
+        className={`${corner} bottom-5 left-5 z-20 aria-pressed:text-primary`}
         aria-label="Lyrics"
         aria-pressed={showLyrics}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         onClick={() => togglePanel('lyrics')}
       >
         {showLyrics ? <LyricsActiveIcon size={18} /> : <LyricsIcon size={18} />}
       </button>
       {/* Up Next, with the speaker beside it: the level slides in over Up Next, as it does in the pill. */}
       <div
-        className={`group/actions absolute right-5 bottom-5 z-1 flex items-center [--volume-gap:36px] transition-opacity duration-300${hidden}`}
+        className={`group/actions absolute right-5 bottom-5 z-20 flex items-center [--volume-gap:36px] transition-opacity duration-300${hidden}`}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         data-volume-open={volumeOpen || undefined}
         onPointerLeave={() => setVolumeOpen(false)}
         onBlur={(event) => {

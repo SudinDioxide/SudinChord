@@ -247,12 +247,20 @@ export function Sidebar() {
         aria-label="Main"
       >
         <div className="mt-2 ml-2 flex h-18 items-center justify-between pr-4 pl-5">
-          <PrefetchLink to="/home" className="inline-flex items-center gap-2 rounded-[6px]" aria-label="SudinChord, Home" onClick={close}>
+          <PrefetchLink
+            to="/home"
+            className="inline-flex items-center gap-2 rounded-[6px]"
+            aria-label="SudinChord, Home"
+            onClick={close}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
             {/* White on dark, as Apple's own wordmark; it follows the label colour so it stays visible in light. */}
             <LogoMark size={22} className="text-primary" />
             <span className="type-[700_19px/24px] tracking-[-0.01em]">SudinChord</span>
           </PrefetchLink>
-          <NavHistoryButtons />
+          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <NavHistoryButtons />
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-3 pl-5 [scrollbar-width:none]">
           <NavList items={PRIMARY} onNavigate={close} />

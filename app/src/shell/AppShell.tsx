@@ -138,6 +138,11 @@ export function AppShell() {
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto]">
+      {/* Top window draggable region for desktop frameless Electron */}
+      <div
+        className="pointer-events-auto fixed top-0 left-0 right-[140px] h-9 z-20 select-none"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
       {/* The side panel slides in from beyond the right edge; never let it scroll the page. */}
       <div className="relative min-h-0 overflow-hidden">
         <AmbientAppBackdrop />
