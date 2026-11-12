@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { PictureInPicture2, SlidersHorizontal } from 'lucide-react';
-import { useAudioFx } from '@/state/audioFx';
+import { PictureInPicture2 } from 'lucide-react';
 import { SleepTimerButton } from '@/components/music/SleepTimerButton';
+import { useSleepTimer } from '@/state/sleepTimer';
 import {
   BackwardIcon,
   ForwardIcon,
@@ -44,6 +44,7 @@ export function PlayerBar() {
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
+  const isSleepActive = useSleepTimer((s) => s.mode !== 'off');
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
   const [volumeOpen, setVolumeOpen] = useState(false);
 
@@ -54,7 +55,7 @@ export function PlayerBar() {
       data-panel-open={sidePanel !== null}
     >
       <div
-        className="glass-pill group/pill pointer-events-auto relative grid h-(--player-pill-height) w-[min(668px,100%)] grid-cols-[184px_minmax(180px,427px)_minmax(57px,auto)] items-center rounded-pill px-4"
+        className="glass-pill group/pill pointer-events-auto relative grid h-(--player-pill-height) w-[min(780px,calc(100%-40px))] grid-cols-[180px_minmax(0,1fr)_auto] items-center rounded-pill px-4"
         role="region"
         aria-label="Player"
       >
@@ -88,7 +89,7 @@ export function PlayerBar() {
         </div>
 
         <div
-          className="group/actions relative flex items-center justify-end gap-[9px]"
+          className="group/actions relative flex items-center justify-end gap-[8px]"
           data-volume-open={volumeOpen || undefined}
           onPointerLeave={() => setVolumeOpen(false)}
           onBlur={(e) => {
@@ -120,15 +121,7 @@ export function PlayerBar() {
           >
             <PictureInPicture2 size={18} strokeWidth={2.2} />
           </button>
-          <button
-            className={fading}
-            aria-label="Equalizer & Audio FX"
-            title="Equalizer & Audio FX"
-            onClick={() => useAudioFx.getState().setModalOpen(true)}
-          >
-            <SlidersHorizontal size={18} strokeWidth={2.2} />
-          </button>
-          <SleepTimerButton className={fading} placement="above-end" />
+          {isSleepActive && <SleepTimerButton className={fading} placement="above-end" />}
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} className={action} />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FolderPlus, ListEnd, ListPlus, ListStart, MoreHorizontal, Plus, Star, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderPlus, ListEnd, ListPlus, ListStart, Moon, MoreHorizontal, Plus, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { SiYoutube } from 'react-icons/si';
 import { Menu, MenuHeader, MenuItem, MenuSeparator, type MenuPlacement } from '@/components/Menu';
@@ -11,6 +11,8 @@ import {
 } from '@/data/music/queries';
 import { useLocalPlaylists, localPlaylists } from '@/playback/local/localPlaylists';
 import { useNewPlaylistModal } from '@/state/newPlaylistModal';
+import { useAudioFx } from '@/state/audioFx';
+import { formatSleepRemaining, useSleepTimer, type SleepTimerMode } from '@/state/sleepTimer';
 import type { Track } from '@/data/music/types';
 import { usePlayer } from '@/state/player';
 
@@ -80,6 +82,46 @@ function PlaylistChoices({ track, onDone, onBack }: { track: Track; onDone: () =
   );
 }
 
+function SleepTimerChoices({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+  const mode = useSleepTimer((s) => s.mode);
+  const setTimer = useSleepTimer((s) => s.setTimer);
+
+  const select = (m: SleepTimerMode) => {
+    setTimer(m);
+    onDone();
+  };
+
+  return (
+    <>
+      <MenuItem icon={<ChevronLeft size={14} />} onSelect={onBack}>
+        Back
+      </MenuItem>
+      <MenuSeparator />
+      <MenuHeader>Sleep Timer</MenuHeader>
+      <MenuItem onSelect={() => select('off')} checked={mode === 'off'}>
+        Off
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem onSelect={() => select('15m')} checked={mode === '15m'}>
+        15 minutes
+      </MenuItem>
+      <MenuItem onSelect={() => select('30m')} checked={mode === '30m'}>
+        30 minutes
+      </MenuItem>
+      <MenuItem onSelect={() => select('45m')} checked={mode === '45m'}>
+        45 minutes
+      </MenuItem>
+      <MenuItem onSelect={() => select('60m')} checked={mode === '60m'}>
+        1 hour
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem onSelect={() => select('end-of-track')} checked={mode === 'end-of-track'}>
+        End of current track
+      </MenuItem>
+    </>
+  );
+}
+
 function AccountFavorite({ track, onClose }: { track: Track; onClose: () => void }) {
   const status = useLikeStatus(track.videoId);
   const setLiked = useSetLiked();
@@ -107,11 +149,18 @@ function TrackMenuItems({
   onClose: () => void;
   onRemoveFromPlaylist?: () => void;
 }) {
-  const [view, setView] = useState<'main' | 'playlists'>('main');
+  const [view, setView] = useState<'main' | 'playlists' | 'sleepTimer'>('main');
   const signedIn = useSignedIn();
+  const sleepMode = useSleepTimer((s) => s.mode);
+  const sleepRemaining = useSleepTimer((s) => s.remainingSec);
+
   if (view === 'playlists') {
     return <PlaylistChoices track={track} onDone={onClose} onBack={() => setView('main')} />;
   }
+  if (view === 'sleepTimer') {
+    return <SleepTimerChoices onDone={onClose} onBack={() => setView('main')} />;
+  }
+
   const { playNext, addToQueue } = usePlayer.getState();
   return (
     <>
@@ -125,6 +174,32 @@ function TrackMenuItems({
       {signedIn && <AccountFavorite track={track} onClose={onClose} />}
       <MenuItem icon={<ListPlus size={15} />} trailing={<ChevronRight size={14} />} onSelect={() => setView('playlists')}>
         Add to Playlist
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        icon={<SlidersHorizontal size={15} />}
+        onSelect={() => {
+          onClose();
+          useAudioFx.getState().setModalOpen(true);
+        }}
+      >
+        Audio Equalizer & FX
+      </MenuItem>
+      <MenuItem
+        icon={<Moon size={15} />}
+        trailing={
+          <div className="flex items-center gap-1.5 text-[11px] text-secondary">
+            {sleepMode !== 'off' && (
+              <span className="text-[#ff0033] font-semibold text-[10px]">
+                {sleepMode === 'end-of-track' ? 'End of track' : formatSleepRemaining(sleepRemaining)}
+              </span>
+            )}
+            <ChevronRight size={14} />
+          </div>
+        }
+        onSelect={() => setView('sleepTimer')}
+      >
+        Sleep Timer
       </MenuItem>
       {onRemoveFromPlaylist && (
         <>
