@@ -1,6 +1,6 @@
 {
   "name": "@bitchord/desktop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "SudinChord Desktop for Windows 11",
   "main": "main.cjs",
@@ -26,7 +26,8 @@
       {
         "provider": "github",
         "owner": "SudinDioxide",
-        "repo": "SudinChord"
+        "repo": "SudinChord",
+        "releaseType": "release"
       }
     ],
     "files": [
