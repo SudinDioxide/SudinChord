@@ -37,6 +37,40 @@ function getElectronPlatform(): ElectronPlatform | undefined {
 
 let lastFetchedLyricsVideoId = '';
 
+function romanizeHangul(text: string): string {
+  const CHO = ['g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h'];
+  const JUNG = ['a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'weo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'];
+  const JONG = ['', 'k', 'k', 'ks', 'n', 'nj', 'nh', 'd', 'l', 'lg', 'lm', 'lb', 'ls', 'lt', 'lp', 'lh', 'm', 'b', 'bs', 's', 'ss', 'ng', 'j', 'ch', 'k', 't', 'p', 'h'];
+
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const offset = code - 0xac00;
+      const c = Math.floor(offset / 588);
+      const v = Math.floor((offset % 588) / 28);
+      const f = offset % 28;
+      out += (CHO[c] ?? '') + (JUNG[v] ?? '') + (JONG[f] ?? '');
+    } else {
+      out += text[i];
+    }
+  }
+  return out;
+}
+
+function getLineRomanized(text: string, existing?: string): string | undefined {
+  if (existing && existing.trim()) return existing.trim();
+  if (/[\u3040-\u30ff]/.test(text)) {
+    const r = romajiOf(text);
+    if (r && r !== text) return r;
+  }
+  if (/[\uac00-\ud7af]/.test(text)) {
+    const h = romanizeHangul(text);
+    if (h && h !== text) return h;
+  }
+  return undefined;
+}
+
 async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlatform | undefined) {
   if (!ep?.sendLyrics || !nowPlaying?.videoId || !nowPlaying.title) return;
   if (lastFetchedLyricsVideoId === nowPlaying.videoId) return;
@@ -63,16 +97,12 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
           ep.sendLyrics({
             videoId: nowPlaying.videoId,
             synced: parsedLines.some((l) => l.timeMs > 0),
-            lines: parsedLines.map((l) => {
-              const isKana = /[\u3040-\u30ff]/.test(l.text);
-              const romanized = l.romanized || (isKana ? romajiOf(l.text) : undefined);
-              return {
-                timeMs: l.timeMs,
-                text: l.text,
-                romanized,
-                translation: l.translation || undefined,
-              };
-            }),
+            lines: parsedLines.map((l) => ({
+              timeMs: l.timeMs,
+              text: l.text,
+              romanized: getLineRomanized(l.text, l.romanized),
+              translation: l.translation || undefined,
+            })),
           });
           return;
         }
@@ -92,16 +122,12 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
       ep.sendLyrics({
         videoId: nowPlaying.videoId,
         synced: result.synced,
-        lines: result.lines.map((l) => {
-          const isKana = /[\u3040-\u30ff]/.test(l.text);
-          const romanized = l.romanized || (isKana ? romajiOf(l.text) : undefined);
-          return {
-            timeMs: l.timeMs,
-            text: l.text,
-            romanized,
-            translation: l.translation || undefined,
-          };
-        }),
+        lines: result.lines.map((l) => ({
+          timeMs: l.timeMs,
+          text: l.text,
+          romanized: getLineRomanized(l.text, l.romanized),
+          translation: l.translation || undefined,
+        })),
       });
     } else {
       ep.sendLyrics({

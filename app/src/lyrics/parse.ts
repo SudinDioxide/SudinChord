@@ -72,11 +72,19 @@ function hasTimedChild(element: Element): boolean {
   return Array.from(element.children).some((child) => child.getAttribute('begin') || hasTimedChild(child));
 }
 
-function collect(node: Node, out: Piece[], backing: Piece[]): void {
+function collect(node: Node, out: Piece[], backing: Piece[], meta?: { romanized?: string; translation?: string }): void {
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === 1) {
       const element = child as Element;
       const role = qualified(element, 'ttm:role');
+      if (role === 'x-roman') {
+        if (meta && element.textContent?.trim()) meta.romanized = element.textContent.trim();
+        continue;
+      }
+      if (role === 'x-translation') {
+        if (meta && element.textContent?.trim()) meta.translation = element.textContent.trim();
+        continue;
+      }
       if (SKIPPED_ROLES.has(role)) continue;
       const sink = role === BACKGROUND_ROLE ? backing : out;
       const begin = ttmlTime(element.getAttribute('begin'));
@@ -84,7 +92,7 @@ function collect(node: Node, out: Piece[], backing: Piece[]): void {
       if (begin !== null && end !== null && !hasTimedChild(element)) {
         sink.push({ kind: 'timed', text: element.textContent ?? '', start: begin, end });
       } else {
-        collect(element, sink, backing);
+        collect(element, sink, backing, meta);
       }
     } else if (child.nodeType === 3) {
       const text = child.textContent ?? '';
@@ -131,7 +139,8 @@ function mergeIntoWords(pieces: Piece[]): LyricWord[] {
 function lineFrom(paragraph: Element): LyricLine | null {
   const pieces: Piece[] = [];
   const backingPieces: Piece[] = [];
-  collect(paragraph, pieces, backingPieces);
+  const meta: { romanized?: string; translation?: string } = {};
+  collect(paragraph, pieces, backingPieces, meta);
   const words = mergeIntoWords(pieces);
   const backingWords = mergeIntoWords(backingPieces);
   const backing = backingWords.length
@@ -142,10 +151,19 @@ function lineFrom(paragraph: Element): LyricLine | null {
     const begin = ttmlTime(paragraph.getAttribute('begin'));
     if (begin === null || !text) return null;
     const end = ttmlTime(paragraph.getAttribute('end'));
-    return line(begin, text, { sungUntilMs: end !== null && end > begin ? end : null });
+    return line(begin, text, {
+      sungUntilMs: end !== null && end > begin ? end : null,
+      romanized: meta.romanized,
+      translation: meta.translation,
+    });
   }
   const begin = ttmlTime(paragraph.getAttribute('begin')) ?? words[0]!.startMs;
-  return line(Math.min(begin, words[0]!.startMs), words.map((w) => w.text).join(' '), { words, background: backing });
+  return line(Math.min(begin, words[0]!.startMs), words.map((w) => w.text).join(' '), {
+    words,
+    background: backing,
+    romanized: meta.romanized,
+    translation: meta.translation,
+  });
 }
 
 export function parseTtml(ttml: string): LyricLine[] {
@@ -161,10 +179,51 @@ export function parseTtml(ttml: string): LyricLine[] {
       const type = agent.getAttribute('type');
       if (id && type) types[id] = type;
     }
+
+    // Extract translations and transliterations from metadata
+    const transMap = new Map<string, string>();
+    const transByIndex: string[] = [];
+    const romanMap = new Map<string, string>();
+    const romanByIndex: string[] = [];
+
+    const allElements = document.getElementsByTagName('*');
+    for (const el of Array.from(allElements)) {
+      const local = (el.localName || el.nodeName).toLowerCase();
+      if (local === 'translation') {
+        const textNodes = el.getElementsByTagName('text');
+        for (let i = 0; i < textNodes.length; i++) {
+          const t = textNodes[i]!;
+          const key = t.getAttribute('for') || t.getAttribute('itunes:key');
+          const txt = t.textContent?.trim() || '';
+          if (key) transMap.set(key, txt);
+          transByIndex.push(txt);
+        }
+      } else if (local === 'transliteration') {
+        const textNodes = el.getElementsByTagName('text');
+        for (let i = 0; i < textNodes.length; i++) {
+          const t = textNodes[i]!;
+          const key = t.getAttribute('for') || t.getAttribute('itunes:key');
+          const txt = t.textContent?.trim() || '';
+          if (key) romanMap.set(key, txt);
+          romanByIndex.push(txt);
+        }
+      }
+    }
+
     const sung: { line: LyricLine; agent: string | null }[] = [];
-    for (const paragraph of Array.from(document.getElementsByTagName('p'))) {
+    const paragraphs = Array.from(document.getElementsByTagName('p'));
+    for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+      const paragraph = paragraphs[pIdx]!;
       const l = lineFrom(paragraph);
-      if (l) sung.push({ line: l, agent: qualified(paragraph, 'ttm:agent') || null });
+      if (l) {
+        const key = qualified(paragraph, 'itunes:key') || paragraph.getAttribute('key') || `l_${pIdx}`;
+        const translation = transMap.get(key) || transByIndex[pIdx] || l.translation;
+        const romanized = romanMap.get(key) || romanByIndex[pIdx] || l.romanized;
+        sung.push({
+          line: { ...l, translation, romanized },
+          agent: qualified(paragraph, 'ttm:agent') || null,
+        });
+      }
     }
     sung.sort((a, b) => a.line.timeMs - b.line.timeMs);
     const sides = lineAlignments(
