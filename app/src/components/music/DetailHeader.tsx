@@ -54,7 +54,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }
       <button
         type="button"
         onClick={handleBack}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-secondary hover:text-primary type-callout transition-colors cursor-pointer mb-2"
+        className="inline-flex h-8 items-center gap-1.5 px-3.5 rounded-[20px] bg-white/10 hover:bg-white/20 border border-white/10 text-white type-callout transition-all active:scale-95 cursor-pointer mb-3 shadow-sm"
         title="Go back"
       >
         <ChevronLeft size={16} strokeWidth={2.2} />
