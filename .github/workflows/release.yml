@@ -12,6 +12,8 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      VITE_PARTY_SERVER_URL: https://api.bitchord.kushagrasingh.in
 
     steps:
       - name: Check out repository

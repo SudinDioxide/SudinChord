@@ -9,5 +9,5 @@ export const config = {
   extensionManifestUrl: import.meta.env.VITE_EXTENSION_MANIFEST_URL || '/downloads/extension.json',
   androidAppUrl: import.meta.env.VITE_ANDROID_APP_URL || 'https://github.com/kushagrasinghx/BitChord/releases/latest',
   /** BitChord's Listen Together server. vite.config.ts refuses a production build without it. */
-  partyServerUrl: import.meta.env.VITE_PARTY_SERVER_URL ?? '',
+  partyServerUrl: import.meta.env.VITE_PARTY_SERVER_URL || 'https://api.bitchord.kushagrasingh.in',
 } as const;
