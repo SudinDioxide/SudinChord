@@ -91,23 +91,26 @@ export function EqualizerModal() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {/* Master EQ Switch */}
-            <div className="flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/10 px-3 py-1">
-              <span className="text-xs font-medium text-white/70">EQ</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold tracking-wide transition-colors ${eqEnabled ? 'text-white' : 'text-white/50'}`}>
+                EQ
+              </span>
               <button
                 type="button"
                 role="switch"
+                aria-label="Toggle Equalizer"
                 aria-checked={eqEnabled}
                 onClick={() => setEqEnabled(!eqEnabled)}
-                className={`relative h-5 w-9 rounded-full p-0.5 border transition-all ${
+                className={`relative h-5 w-9 rounded-full p-[2px] cursor-pointer transition-all duration-200 ease-out ${
                   eqEnabled
-                    ? 'bg-primary border-primary/60 shadow-[0_0_10px_rgba(255,0,51,0.4)]'
-                    : 'bg-white/15 border-white/10'
+                    ? 'bg-[#fa233b] shadow-[0_0_12px_rgba(250,35,59,0.45)]'
+                    : 'bg-white/15 hover:bg-white/20 border border-white/10'
                 }`}
               >
                 <span
-                  className={`block size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                  className={`block size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ease-out ${
                     eqEnabled ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
@@ -171,22 +174,23 @@ export function EqualizerModal() {
 
           {/* Loudness Normalizer Toggle */}
           <div className="flex items-center gap-2.5 rounded-[12px] bg-white/[0.05] border border-white/10 px-3 h-8">
-            <Volume2 size={14} className="text-white/60" />
+            <Volume2 size={14} className={normalization ? 'text-white' : 'text-white/50'} />
             <span className="text-xs text-white/80 font-medium">Loudness Normalizer</span>
             <button
               type="button"
               role="switch"
+              aria-label="Toggle Loudness Normalizer"
               aria-checked={normalization}
               onClick={() => setNormalization(!normalization)}
-              className={`relative h-4.5 w-8 rounded-full p-0.5 border transition-all ${
+              className={`relative h-5 w-9 rounded-full p-[2px] cursor-pointer transition-all duration-200 ease-out ${
                 normalization
-                  ? 'bg-primary border-primary/60 shadow-[0_0_8px_rgba(255,0,51,0.35)]'
-                  : 'bg-white/15 border-white/10'
+                  ? 'bg-[#fa233b] shadow-[0_0_12px_rgba(250,35,59,0.45)]'
+                  : 'bg-white/15 hover:bg-white/20 border border-white/10'
               }`}
             >
               <span
-                className={`block size-3 rounded-full bg-white shadow-sm transition-transform ${
-                  normalization ? 'translate-x-3.5' : 'translate-x-0'
+                className={`block size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ease-out ${
+                  normalization ? 'translate-x-4' : 'translate-x-0'
                 }`}
               />
             </button>
