@@ -1,11 +1,12 @@
-# BitChord Desktop for Windows 11
+# SudinChord Desktop for Windows
 
-Native Windows 11 desktop application for **BitChord**, featuring:
+Native Windows desktop application for **SudinChord**, featuring:
 - **Windows 11 Mica & Acrylic** glass material support.
 - **Hardware Media Keys** & Windows 11 SMTC (System Media Transport Controls) flyout integration.
-- **Seamless playback** with Shaka Player and YouTube Music integration.
-- **Synced Apple Music-style lyrics** powered by `am-lyrics`.
-- **Pre-bundled companion extension** loaded automatically.
+- **Lossless Audio Streaming & Local Playback** (FLAC, ALAC, WAV, AAC, MP3) with HTTP 206 byte-range seeking.
+- **Synced Apple Music-style lyrics** with Romanization & Translation support.
+- **Seamless Local & Cloud Playlists** with instant updates.
+- **AutoMix & DJ Dual-Deck Engine**.
 
 ## Requirements
 - Node.js 22+
@@ -21,6 +22,11 @@ pnpm --filter @bitchord/app dev
 pnpm --filter @bitchord/desktop dev
 ```
 
+Or from the root:
+```bash
+pnpm desktop
+```
+
 ## Running Production Build Locally
 ```bash
 # Build app & extension
@@ -31,12 +37,10 @@ pnpm --filter @bitchord/app build
 pnpm --filter @bitchord/desktop start
 ```
 
-## Building Windows 11 Installer & Portable Executable
+## Building Windows Installer & Portable Executable
 ```bash
-pnpm --filter @bitchord/desktop build:win
+pnpm desktop:build
 ```
 The output files will be created in `web/desktop/dist-electron/`:
-- `BitChord Setup <version>.exe` (Full NSIS Windows installer)
-- `BitChord <version>.exe` (Standalone portable Windows executable)
-- `win-unpacked/` (Unpacked folder ready to run `BitChord.exe` directly)
-
+- `SudinChord-Setup-1.1.2.exe` (Full NSIS Windows installer)
+- `win-unpacked/` (Unpacked portable folder ready to run `SudinChord.exe` directly)

@@ -2,16 +2,25 @@
 
 A modern, high-fidelity desktop music player for Windows built with React, TypeScript, and Electron.
 
+[![Release](https://img.shields.io/github/v/release/SudinDioxide/SudinChord?label=Latest%20Release&color=blue)](https://github.com/SudinDioxide/SudinChord/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-lightgrey.svg)](https://github.com/SudinDioxide/SudinChord/releases)
+
 ---
 
 ## ✨ Highlights & Features
 
-- **Lossless Audio Streaming Addons:** Configure custom lossless audio streaming endpoints to stream FLAC / studio-grade audio seamlessly.
-- **Enhanced Local Music Library:** Plays FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 files with full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding.
+- **Lossless Audio Streaming Addons:** Connect custom streaming endpoints (e.g. PencariMovie / Tidal / Qobuz backends) to stream studio-quality lossless FLAC directly.
+- **Enhanced Local Music Library:** Play local FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 files with full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding.
 - **Automatic Library Resuming & Artwork Caching:** Automatically restores your last opened music folder upon app launch with in-memory LRU artwork caching and disk metadata caching.
-- **Synced Lyrics with Romanization & Translation:** Real-time word-by-word synchronized lyrics, with integrated support for fast romanization and translation (powered by Lyrica and dedicated APIs).
+- **Comprehensive Playlist Management:**
+  - Create and manage both **Offline Local Playlists** and **YouTube Music Cloud Playlists**.
+  - **Instant 0ms Optimistic Updates**: Adding/removing tracks and creating/deleting playlists reflect immediately without UI lag.
+  - Quick track removal via playlist hover trash button or context menu.
+  - One-click playlist deletion with clean, modern confirmation dialogs.
+- **Synced Lyrics with Romanization & Translation:** Real-time word-by-word synchronized lyrics, with integrated support for fast romanization and translation (powered by Lyrica, LRCLIB, Kugou, and YouTube Music).
 - **AutoMix & DJ Deck Engine:** Dual-deck playback, automatic BPM/beat-grid matching, smooth track transitions, and parametric EQ.
-- **Integrations:** Spotify playlist import and Discord Rich Presence listening activity.
+- **Windows 11 Integration & Discord RPC:** Native Windows System Media Transport Controls (SMTC) flyout support, media keys, and Discord Rich Presence listening activity.
 
 ---
 
@@ -19,33 +28,33 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-👉 **[Download SudinChord Setup 1.0.0.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.0.0/SudinChord.Setup.1.0.0.exe)**
+👉 **[Download SudinChord Setup 1.1.2.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.2/SudinChord.Setup.1.1.2.exe)**
 
-Or view all releases at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
+Or view all releases and release notes at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
 
-> **Note:** The `desktop/dist-electron/` directory contains compiled binaries (.exe files) which are excluded from the git source tree due to file size limits. They are automatically generated when you build from source (see below) or can be downloaded directly from the Releases link above.
+> **Note:** The compiled binaries (`.exe` installers) are hosted on GitHub Releases and excluded from the git repository source tree.
 
 ---
 
 ## 🛠️ How to Build from Source (For Developers)
 
-#### Prerequisites
+### Prerequisites
 - **[Node.js](https://nodejs.org/)** (v22.0.0 or higher)
 - **[pnpm](https://pnpm.io/)** (v9.0.0 or higher)
 - **[Git](https://git-scm.com/)**
 
-#### 1. Clone the Repository
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/SudinDioxide/SudinChord.git
 cd SudinChord
 ```
 
-#### 2. Install Dependencies
+### 2. Install Dependencies
 ```bash
 pnpm install
 ```
 
-#### 3. Run in Development Mode
+### 3. Run in Development Mode
 To launch the desktop Electron app in development mode with hot-reloading:
 ```bash
 pnpm desktop
@@ -56,14 +65,14 @@ Or to run the web interface in your browser:
 pnpm dev
 ```
 
-#### 4. Build Windows Executable & Installer
-To compile all production web assets and build the Windows package:
+### 4. Build Windows Executable & Installer
+To compile production assets and package the Windows desktop installer:
 ```bash
 pnpm desktop:build
 ```
 
 The output files will be created in `desktop/dist-electron/`:
-- `SudinChord Setup 1.0.0.exe` (Windows NSIS Installer)
+- `SudinChord-Setup-1.1.2.exe` (Windows NSIS Installer)
 - `win-unpacked/SudinChord.exe` (Portable Windows Application)
 
 ---
@@ -80,14 +89,20 @@ SudinChord supports connecting custom lossless streaming endpoints:
 
 ### 2. Playing Local Music
 1. Click **Local Files** in the sidebar.
-2. Click **Open Music Folder** and select your local music directory (e.g. `Music/Tamil`).
+2. Click **Open Music Folder** and select your local music directory (e.g. `Music/Tamil` or `Music/Hi-Res`).
 3. **Supported Formats:**
    - `.flac` (16-bit and 24-bit high-resolution FLAC)
    - `.m4a` / `.alac` (Apple Lossless Audio Codec and AAC)
    - `.wav`, `.mp3`, `.ogg`, `.opus`, `.webm`
 4. **Auto-Save:** SudinChord automatically remembers your last opened music folder and restores all tracks and album artwork whenever you reopen the app.
 
-### 3. Setting Up Lyrics (Romanization & Translation)
+### 3. Managing Playlists
+- **Creating a Playlist**: Click **+** or **New Playlist** in the sidebar. Choose either **Local Playlist** (saved offline on your computer) or **YouTube Music** (saved to your Google/YouTube account).
+- **Adding Songs**: Click the three dots `•••` on any track and select **Add to Playlist**.
+- **Removing Songs**: Hover over any track in a playlist and click the trash can icon, or select **Remove from Playlist** from the track's context menu.
+- **Deleting a Playlist**: Navigate to the playlist page and click **Delete Playlist**.
+
+### 4. Setting Up Lyrics (Romanization & Translation)
 1. Open **Settings** › **Lyrics**.
 2. **Lyric Providers:** Enable sources like Lyrica, LRCLIB, Kugou, Musixmatch, or YouTube Music.
 3. **Romanization & Translation:**
@@ -105,9 +120,11 @@ SudinChord supports connecting custom lossless streaming endpoints:
 SudinChord/
 ├── app/                  # React + Vite frontend application
 │   ├── src/
+│   │   ├── components/   # UI components (TrackList, TrackMenu, Modals, etc.)
+│   │   ├── data/         # Data layer & queries (YouTube, Local Playlists, Cache)
 │   │   ├── playback/     # Audio engines, local playback, AutoMix, Addon resolver
 │   │   ├── lyrics/       # Synced lyrics providers (Lyrica, LRCLIB, Kugou)
-│   │   ├── pages/        # UI Views (Home, Local Files, Addons, Settings)
+│   │   ├── pages/        # UI Views (Home, Local Files, Playlist, Addons, Settings)
 │   │   └── shell/        # Player bar, fullscreen view, navigation sidebar
 ├── desktop/              # Electron desktop backend
 │   ├── main.cjs          # Local HTTP streaming server with HTTP 206 Byte-Range & ALAC transcoding
