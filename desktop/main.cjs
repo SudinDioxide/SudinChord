@@ -1,5 +1,10 @@
 const { app, BrowserWindow, session, ipcMain, nativeTheme, shell, dialog, protocol, net, globalShortcut, nativeImage } = require('electron');
-const { autoUpdater } = require('electron-updater');
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+} catch (e) {
+  console.warn('[AutoUpdater] electron-updater module not available in bundle:', e?.message || e);
+}
 const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -1248,6 +1253,7 @@ ipcMain.on('pip:video-active', (_event, active) => {
 
 // Auto-Updater configuration
 function setupAutoUpdater() {
+  if (!autoUpdater) return;
   autoUpdater.logger = console;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -1267,7 +1273,7 @@ function setupAutoUpdater() {
   });
 
   ipcMain.on('app:check-for-updates', () => {
-    if (app.isPackaged) {
+    if (app.isPackaged && autoUpdater) {
       autoUpdater.checkForUpdates().catch((err) => {
         console.warn('[AutoUpdater] Manual check error:', err.message);
       });
@@ -1275,7 +1281,7 @@ function setupAutoUpdater() {
   });
 
   ipcMain.on('app:install-update', () => {
-    autoUpdater.quitAndInstall();
+    if (autoUpdater) autoUpdater.quitAndInstall();
   });
 }
 
@@ -1322,7 +1328,7 @@ app.whenReady().then(async () => {
   registerGlobalShortcuts();
   setupAutoUpdater();
 
-  if (app.isPackaged) {
+  if (app.isPackaged && autoUpdater) {
     setTimeout(() => {
       autoUpdater.checkForUpdatesAndNotify().catch((err) => {
         console.warn('[AutoUpdater] Initial check error:', err.message);

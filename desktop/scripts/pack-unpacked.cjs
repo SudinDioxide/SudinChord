@@ -37,18 +37,33 @@ async function main() {
     }
   }
 
-  // Also include electron-updater from node_modules if present
-  const updaterSrc = path.join(desktopDir, 'node_modules', 'electron-updater');
-  if (fs.existsSync(updaterSrc)) {
-    const updaterDest = path.join(stageDir, 'node_modules', 'electron-updater');
-    fs.mkdirSync(path.dirname(updaterDest), { recursive: true });
-    fs.cpSync(updaterSrc, updaterDest, { recursive: true, dereference: true });
+  // Include electron-updater and all its dependencies
+  const stageNm = path.join(stageDir, 'node_modules');
+  fs.mkdirSync(stageNm, { recursive: true });
+
+  const pnpmRoots = [
+    path.resolve(__dirname, '../../node_modules/.pnpm/electron-updater@6.8.11_supports-color@7.2.0/node_modules'),
+    path.resolve(__dirname, '../../node_modules/.pnpm/fs-extra@10.1.0/node_modules'),
+  ];
+
+  for (const root of pnpmRoots) {
+    if (fs.existsSync(root)) {
+      const items = fs.readdirSync(root);
+      for (const item of items) {
+        if (item.startsWith('.')) continue;
+        const itemSrc = path.join(root, item);
+        const itemDest = path.join(stageNm, item);
+        if (!fs.existsSync(itemDest)) {
+          fs.cpSync(itemSrc, itemDest, { recursive: true, dereference: true });
+        }
+      }
+    }
   }
 
   console.log('[pack-unpacked] Packing stage to app.asar...');
   await asar.createPackage(stageDir, targetAsar);
   fs.rmSync(stageDir, { recursive: true, force: true });
-  console.log('[pack-unpacked] Successfully updated app.asar!');
+  console.log('[pack-unpacked] Successfully updated app.asar with all dependencies!');
 }
 
 main().catch(console.error);
