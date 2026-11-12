@@ -114,13 +114,19 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
     // 2. Fetch from lyrics repository
     const { useLyricsUi } = await import('@/lyrics/useLyrics');
     const picked = useLyricsUi.getState().picked[nowPlaying.videoId];
+    const { usePlayer } = await import('@/state/player');
+    const player = usePlayer.getState();
+    const entry = player.queue[player.index];
+    const durationSec = entry?.track.durationSec || nowPlaying.durationSec || 0;
+    const album = entry?.track.album?.name ?? null;
+
     const result = await lookupLyrics(
       {
         videoId: nowPlaying.videoId,
         title: nowPlaying.title,
         artist: nowPlaying.artist,
-        durationMs: Math.round(nowPlaying.durationSec * 1000),
-        album: null,
+        durationMs: Math.round(durationSec * 1000),
+        album,
       },
       { ...(picked && { only: picked }) },
     );

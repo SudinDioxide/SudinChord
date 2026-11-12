@@ -56,10 +56,12 @@ function remember(videoId: string, isrc: string | null | undefined) {
 }
 
 const cache = new Map<string, { at: number; result: LyricsResult | null }>();
+const inFlightLookups = new Map<string, Promise<LyricsResult | null>>();
 
 /** Drops every remembered answer: a newly allowed host may have what was missing. */
 export function forgetLyrics() {
   cache.clear();
+  inFlightLookups.clear();
 }
 
 function toResult(source: LyricsSourceId, parsed: Parsed): LyricsResult {
@@ -88,175 +90,141 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
   const sequence = only ? [only] : enabledSources();
   if (!sequence.length) return null;
   const { paxsenixKey, preferSyllables } = useLyricsSettings.getState();
-  // preferSyllables picks a different winner from the same answers, so it is part of the key.
-  const key = `${track.videoId}|${track.durationMs}|${track.title}|${track.artist}|${only ?? ''}|${sequence.join(',')}|${preferSyllables}`;
+  // Key primarily on videoId so both App and PIP callers hit the exact same cache
+  const key = `${track.videoId}|${only ?? ''}|${sequence.join(',')}|${preferSyllables}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
 
-  const query: providers.LyricsQuery = {
-    videoId: track.videoId,
-    title: forLyricsSearch(track.title),
-    artist: artistForLyricsSearch(track.artist),
-    durationMs: track.durationMs,
-    album: track.album,
-    isrc: isrcs.get(track.videoId) ?? null,
-  };
-  let hit: providers.BiniHit | null = null;
-  if (!query.isrc && sequence.includes('bini')) {
-    hit = await withTimeout(providers.biniIdentify(query).catch(() => null), IDENTIFY_TIMEOUT_MS);
-    if (hit?.isrc) {
-      remember(track.videoId, hit.isrc);
-      query.isrc = hit.isrc;
-    }
-  }
+  const inFlight = inFlightLookups.get(key);
+  if (inFlight) return inFlight;
 
-  const documents = new Map<string, Promise<string | null>>();
-  const get: providers.SharedGet = (url) => {
-    let pending = documents.get(url);
-    if (!pending) {
-      pending = lyricsGet(url);
-      documents.set(url, pending);
-    }
-    return pending;
-  };
-
-  const fetchFrom = (source: LyricsSourceId): Promise<Parsed | null> => {
-    switch (source) {
-      case 'netease':
-        return providers.netEase(query);
-      case 'qq-music':
-        return providers.qqMusic(query);
-      case 'lrc-red':
-        return providers.lrcRed(query, get);
-      case 'bini':
-        return providers.bini(query, get, hit).then((found) => {
-          remember(track.videoId, found?.isrc);
-          return found;
-        });
-      case 'better-lyrics':
-        return providers.betterLyrics(query);
-      case 'better-lyrics-portato':
-        return providers.betterLyricsPortato(query);
-      case 'paxsenix':
-        return providers.paxSenix(query);
-      case 'paxsenix-spotify':
-        return providers.paxSenixSpotify(query, paxsenixKey);
-      case 'paxsenix-musixmatch':
-        return providers.paxSenixMusixmatch(query, paxsenixKey);
-      case 'lyrics-plus':
-        return providers.lyricsPlus(query);
-      case 'unison':
-        return providers.unison(query);
-      case 'lyrica':
-        return providers.lyrica(query);
-      case 'youtube-captions':
-        return providers.youtubeCaptions(query);
-      case 'youtube-music':
-        return providers.youtubeMusicLyrics(query);
-      case 'kugou':
-        return providers.kugou(query);
-      case 'lrclib':
-        return providers.lrclib(query);
-      case 'musixmatch':
-        return providers.musixmatch(query);
-      case 'genius':
-        return providers.genius(query);
-      case 'embedded':
-        return Promise.resolve(null);
-    }
-  };
-
-  // 5-second strict timeout: if a provider loads for > 5 seconds, change to another API
-  const run = (source: LyricsSourceId): Promise<LyricsResult | null> => {
-    onSource?.(source, 'pending');
-    return withTimeout(fetchFrom(source), 5000)
-      .catch(() => null)
-      .then((parsed) => {
-        const result = parsed?.lines.some((l) => l.text.trim()) ? toResult(source, parsed) : null;
-        onSource?.(source, result ? 'found' : 'missing');
-        return result;
-      });
-  };
-
-  // Rule: "If only got one lyric api, stay on that"
-  if (sequence.length === 1) {
-    let single = await run(sequence[0]!);
-    if (single && single.lines.length) {
-      const current = single;
-      const enriched = await autoEnrichLyrics(current.lines).catch(() => current.lines);
-      single = {
-        ...current,
-        lines: enriched,
-        ttml: writeTtml(enriched),
+  const promise = (async () => {
+    try {
+      const query: providers.LyricsQuery = {
+        videoId: track.videoId,
+        title: forLyricsSearch(track.title),
+        artist: artistForLyricsSearch(track.artist),
+        durationMs: track.durationMs,
+        album: track.album,
+        isrc: isrcs.get(track.videoId) ?? null,
       };
-    }
-    cache.set(key, { at: Date.now(), result: single });
-    return single;
-  }
-
-  // Check whether a result has Romanization or Translation
-  const hasRomanOrTrans = (r: LyricsResult | null) =>
-    Boolean(
-      r &&
-        r.lines.some(
-          (l) =>
-            (l.romanized && l.romanized.trim().length > 0) ||
-            (l.translation && l.translation.trim().length > 0),
-        ),
-    );
-
-  let bestRichSynced: LyricsResult | null = null; // Synced + (Romanized or Translated)
-  let bestWordSynced: LyricsResult | null = null; // Syllable/word synced
-  let firstSynced: LyricsResult | null = null; // First synced in priority order
-  const plainCandidates: LyricsResult[] = []; // Plain lyrics for random fallback
-
-  for (const source of sequence) {
-    if (source === 'genius' && (bestRichSynced || bestWordSynced || firstSynced)) continue;
-
-    const found = await run(source);
-    if (!found) continue;
-
-    if (found.synced) {
-      if (!firstSynced) firstSynced = found;
-      // 1. Highest priority: choose lyric that got romanize and translation
-      if (hasRomanOrTrans(found)) {
-        bestRichSynced = found;
-        break; // Immediate top pick! Stop and return this rich result!
+      let hit: providers.BiniHit | null = null;
+      if (!query.isrc && sequence.includes('bini')) {
+        hit = await withTimeout(providers.biniIdentify(query).catch(() => null), IDENTIFY_TIMEOUT_MS);
+        if (hit?.isrc) {
+          remember(track.videoId, hit.isrc);
+          query.isrc = hit.isrc;
+        }
       }
 
-      if (found.wordSynced && !bestWordSynced) {
-        bestWordSynced = found;
-        if (preferSyllables) break;
+      const documents = new Map<string, Promise<string | null>>();
+      const get: providers.SharedGet = (url) => {
+        let pending = documents.get(url);
+        if (!pending) {
+          pending = lyricsGet(url);
+          documents.set(url, pending);
+        }
+        return pending;
+      };
+
+      const fetchFrom = (source: LyricsSourceId): Promise<Parsed | null> => {
+        switch (source) {
+          case 'netease':
+            return providers.netEase(query);
+          case 'qq-music':
+            return providers.qqMusic(query);
+          case 'lrc-red':
+            return providers.lrcRed(query, get);
+          case 'bini':
+            return providers.bini(query, get, hit).then((found) => {
+              remember(track.videoId, found?.isrc);
+              return found;
+            });
+          case 'better-lyrics':
+            return providers.betterLyrics(query);
+          case 'better-lyrics-portato':
+            return providers.betterLyricsPortato(query);
+          case 'paxsenix':
+            return providers.paxSenix(query);
+          case 'paxsenix-spotify':
+            return providers.paxSenixSpotify(query, paxsenixKey);
+          case 'paxsenix-musixmatch':
+            return providers.paxSenixMusixmatch(query, paxsenixKey);
+          case 'lyrics-plus':
+            return providers.lyricsPlus(query);
+          case 'unison':
+            return providers.unison(query);
+          case 'lyrica':
+            return providers.lyrica(query);
+          case 'youtube-captions':
+            return providers.youtubeCaptions(query);
+          case 'youtube-music':
+            return providers.youtubeMusicLyrics(query);
+          case 'kugou':
+            return providers.kugou(query);
+          case 'lrclib':
+            return providers.lrclib(query);
+          case 'musixmatch':
+            return providers.musixmatch(query);
+          case 'genius':
+            return providers.genius(query);
+          case 'embedded':
+            return Promise.resolve(null);
+        }
+      };
+
+      const run = (source: LyricsSourceId): Promise<LyricsResult | null> => {
+        onSource?.(source, 'pending');
+        return withTimeout(fetchFrom(source), 5000)
+          .catch(() => null)
+          .then((parsed) => {
+            const result = parsed?.lines.some((l) => l.text.trim()) ? toResult(source, parsed) : null;
+            onSource?.(source, result ? 'found' : 'missing');
+            return result;
+          });
+      };
+
+      // Fast concurrent race: all enabled sources are requested in parallel
+      const racing = sequence.map((source) => ({ source, job: source === 'genius' ? null : run(source) }));
+      let lineSynced: LyricsResult | null = null;
+      let plain: LyricsResult | null = null;
+      let winner: LyricsResult | null = null;
+
+      for (const entry of racing) {
+        if (entry.source === 'genius' && (lineSynced || plain)) continue;
+        const found = await (entry.job ?? run(entry.source));
+        if (!found) continue;
+
+        if (found.wordSynced && preferSyllables) {
+          winner = found;
+          break;
+        }
+        if (found.synced && !preferSyllables) {
+          winner = found;
+          break;
+        }
+        if (found.synced) lineSynced ??= found;
+        else plain ??= found;
       }
-    } else {
-      plainCandidates.push(found);
+
+      winner ??= lineSynced ?? plain;
+
+      if (winner && winner.lines.length) {
+        const enriched = await autoEnrichLyrics(winner.lines).catch(() => winner!.lines);
+        winner = {
+          ...winner,
+          lines: enriched,
+          ttml: writeTtml(enriched),
+        };
+      }
+
+      cache.set(key, { at: Date.now(), result: winner });
+      return winner;
+    } finally {
+      inFlightLookups.delete(key);
     }
-  }
+  })();
 
-  // Winner selection hierarchy:
-  // 1. Synced with romanization and/or translation
-  // 2. Word-synced (if preferSyllables) or first synced in priority order
-  // 3. Random choice among plain lyric providers
-  let winner: LyricsResult | null =
-    bestRichSynced ??
-    (preferSyllables ? (bestWordSynced ?? firstSynced) : firstSynced);
-
-  if (!winner && plainCandidates.length > 0) {
-    // "if not, choose random lyric api that got plain lyric"
-    const randomIndex = Math.floor(Math.random() * plainCandidates.length);
-    winner = plainCandidates[randomIndex] ?? plainCandidates[0]!;
-  }
-
-  if (winner && winner.lines.length) {
-    const current = winner;
-    const enriched = await autoEnrichLyrics(current.lines).catch(() => current.lines);
-    winner = {
-      ...current,
-      lines: enriched,
-      ttml: writeTtml(enriched),
-    };
-  }
-
-  cache.set(key, { at: Date.now(), result: winner });
-  return winner;
+  inFlightLookups.set(key, promise);
+  return promise;
 }

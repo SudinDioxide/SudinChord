@@ -306,16 +306,11 @@ export function FullScreenPlayer() {
   // from which provider, is the panel's own business to say.
   const showLyrics = panel === 'lyrics';
   const showQueue = panel === 'queue';
-  // Keep renderedPanel mounted during the 500ms exit transition
-  const [renderedPanel, setRenderedPanel] = useState<'lyrics' | 'queue' | null>(panel);
+  // Keep mountedPanel persistent so exit and entrance transitions are always fluid
+  const [mountedPanel, setMountedPanel] = useState<'lyrics' | 'queue' | null>(() => panel ?? 'lyrics');
   useEffect(() => {
     if (panel) {
-      setRenderedPanel(panel);
-    } else {
-      const t = setTimeout(() => {
-        setRenderedPanel(null);
-      }, 500);
-      return () => clearTimeout(t);
+      setMountedPanel(panel);
     }
   }, [panel]);
 
@@ -466,7 +461,7 @@ export function FullScreenPlayer() {
         className={
           theater
             ? `absolute inset-x-0 bottom-0 flex justify-center bg-[linear-gradient(to_top,rgb(0_0_0/0.72),rgb(0_0_0/0.35)_55%,transparent)] px-6 pt-32 pb-16 transition-opacity duration-300${hidden}`
-            : 'flex h-full items-center justify-center gap-x-[clamp(32px,5vw,96px)] px-[clamp(20px,5vw,80px)] py-16 max-md:flex-col max-md:px-6 max-md:pb-18'
+            : 'relative flex h-full items-center justify-center px-[clamp(20px,5vw,80px)] py-16 max-md:flex-col max-md:px-6 max-md:pb-18 overflow-hidden'
         }
         data-lyrics={column || undefined}
       >
@@ -474,7 +469,7 @@ export function FullScreenPlayer() {
           className={
             theater
               ? 'flex w-[min(720px,100%)] min-w-0 flex-col'
-              : `flex w-[var(--art)] min-w-0 flex-col flex-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]${column ? ' max-md:order-2 max-md:w-full' : ''}`
+              : `flex w-[var(--art)] min-w-0 flex-col flex-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform transform-gpu${column ? ' max-md:order-2 max-md:w-full' : ''}`
           }
           aria-label="Player"
         >
@@ -544,21 +539,24 @@ export function FullScreenPlayer() {
           <AudioVisualizer className="mt-4 w-full rounded-[10px]" height={44} barCount={40} />
         </section>
 
-        {renderedPanel && (
+        {mountedPanel && (
           <div
-            className={`self-stretch flex flex-col min-h-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            className={`self-stretch flex flex-col min-h-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[max-width,opacity,transform,margin] transform-gpu ${
               column
-                ? 'w-[min(48vw,680px)] max-md:w-full max-md:flex-1 opacity-100 translate-x-0 pointer-events-auto'
-                : 'w-0 max-md:h-0 opacity-0 translate-x-12 pointer-events-none'
+                ? 'max-w-[min(48vw,680px)] ml-[clamp(32px,5vw,96px)] max-md:ml-0 max-md:w-full max-md:flex-1 opacity-100 translate-x-0 pointer-events-auto'
+                : 'max-w-0 ml-0 max-md:h-0 opacity-0 translate-x-12 pointer-events-none'
             }`}
+            style={{
+              transitionProperty: 'max-width, margin-left, opacity, transform',
+            }}
           >
             <div className="w-[min(48vw,680px)] max-md:w-full flex-1 min-h-0 flex flex-col">
-              {renderedPanel === 'lyrics' && (
+              {mountedPanel === 'lyrics' && (
                 <section className="flex flex-1 min-h-0 min-w-0 self-stretch overflow-visible" aria-label="Lyrics">
                   <LyricsPanel variant="full" />
                 </section>
               )}
-              {renderedPanel === 'queue' && (
+              {mountedPanel === 'queue' && (
                 <section
                   className="flex flex-1 min-h-0 flex-col self-stretch [mask-image:linear-gradient(180deg,#000_calc(100%-80px),transparent)]"
                   aria-label="Up Next"
