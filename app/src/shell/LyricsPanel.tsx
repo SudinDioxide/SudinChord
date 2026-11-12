@@ -17,6 +17,7 @@ import { LyricsSettings } from './LyricsSettings';
 type AmLyricsElement = HTMLElement & {
   currentTime: number;
   ttml?: string;
+  noAutoAlternates?: boolean;
   interpolate: boolean;
   autoScroll: boolean;
   highlightColor: string;
@@ -123,6 +124,7 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   // and finished after ours, wiping it.
   useEffect(() => {
     const el = document.createElement('am-lyrics') as AmLyricsElement;
+    el.noAutoAlternates = true;
     el.ttml = ttml;
     el.interpolate = true;
     el.autoScroll = true;
@@ -169,6 +171,7 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
 
   useEffect(() => {
     if (element.current && element.current.ttml !== ttml) {
+      element.current.noAutoAlternates = true;
       element.current.ttml = ttml;
       element.current.showTranslation = true;
       element.current.showRomanization = true;
