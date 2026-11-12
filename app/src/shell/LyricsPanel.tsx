@@ -404,6 +404,24 @@ export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' 
   const fontReady = useLyricFont();
   const result = lyrics.data;
   const full = variant === 'full';
+
+  // Synchronize the exact active lyrics result to PIP miniplayer in real time
+  useEffect(() => {
+    if (!result || !videoId) return;
+    const ep = (window as unknown as { electronPlatform?: { sendLyrics?: (l: unknown) => void } }).electronPlatform;
+    if (ep?.sendLyrics) {
+      ep.sendLyrics({
+        videoId,
+        synced: result.synced,
+        lines: result.lines.map((l) => ({
+          timeMs: l.timeMs,
+          text: l.text,
+          romanized: l.romanized || undefined,
+          translation: l.translation || undefined,
+        })),
+      });
+    }
+  }, [result, videoId]);
   const empty = full
     ? 'flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center type-title-3 text-secondary'
     : 'flex flex-1 flex-col items-center justify-center gap-2 px-6 pb-20 text-center type-[400_12px/16px] text-secondary';

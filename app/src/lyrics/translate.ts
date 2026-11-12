@@ -1,4 +1,5 @@
 import type { LyricLine } from './model';
+import { romajiOf } from '@/data/match/trackMatcher';
 
 interface TranslationResult {
   translations: string[];
@@ -7,6 +8,40 @@ interface TranslationResult {
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+const HANGUL_CHO = ['g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h'];
+const HANGUL_JUNG = ['a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'weo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'];
+const HANGUL_JONG = ['', 'k', 'k', 'ks', 'n', 'nj', 'nh', 'd', 'l', 'lg', 'lm', 'lb', 'ls', 'lt', 'lp', 'lh', 'm', 'b', 'bs', 's', 'ss', 'ng', 'j', 'ch', 'k', 't', 'p', 'h'];
+
+export function romanizeHangul(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const offset = code - 0xac00;
+      const c = Math.floor(offset / 588);
+      const v = Math.floor((offset % 588) / 28);
+      const f = offset % 28;
+      out += (HANGUL_CHO[c] ?? '') + (HANGUL_JUNG[v] ?? '') + (HANGUL_JONG[f] ?? '');
+    } else {
+      out += text[i];
+    }
+  }
+  return out;
+}
+
+export function romanizeLine(text: string, existing?: string): string | undefined {
+  if (existing && existing.trim()) return existing.trim();
+  if (/[\u3040-\u30ff]/.test(text)) {
+    const r = romajiOf(text);
+    if (r && r !== text) return r;
+  }
+  if (/[\uac00-\ud7af]/.test(text)) {
+    const h = romanizeHangul(text);
+    if (h && h !== text) return h;
+  }
+  return undefined;
+}
 
 /**
  * Batched translation using Google's dict-chrome-ex endpoint (unthrottled, fast JSON, no CAPTCHA).
@@ -141,3 +176,25 @@ export async function autoTranslateLyrics(
     return translation ? { ...l, translation } : l;
   });
 }
+
+/**
+ * Enriches lyric lines with both romanization (Japanese Kana, Korean Hangul)
+ * and translation (non-English lines), ensuring that both maximized lyrics and PIP
+ * share the identical data.
+ */
+export async function autoEnrichLyrics(
+  lines: LyricLine[],
+  targetLang = 'en',
+): Promise<LyricLine[]> {
+  if (!lines.length) return lines;
+
+  // 1. Synchronously populate romanization if not already present
+  const withRoman = lines.map((l) => {
+    const romanized = romanizeLine(l.text, l.romanized);
+    return romanized && romanized !== l.romanized ? { ...l, romanized } : l;
+  });
+
+  // 2. Asynchronously translate non-English lines
+  return autoTranslateLyrics(withRoman, targetLang);
+}
+

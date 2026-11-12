@@ -112,13 +112,18 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
     }
 
     // 2. Fetch from lyrics repository
-    const result = await lookupLyrics({
-      videoId: nowPlaying.videoId,
-      title: nowPlaying.title,
-      artist: nowPlaying.artist,
-      durationMs: Math.round(nowPlaying.durationSec * 1000),
-      album: null,
-    });
+    const { useLyricsUi } = await import('@/lyrics/useLyrics');
+    const picked = useLyricsUi.getState().picked[nowPlaying.videoId];
+    const result = await lookupLyrics(
+      {
+        videoId: nowPlaying.videoId,
+        title: nowPlaying.title,
+        artist: nowPlaying.artist,
+        durationMs: Math.round(nowPlaying.durationSec * 1000),
+        album: null,
+      },
+      { ...(picked && { only: picked }) },
+    );
 
     if (result && result.lines.length) {
       ep.sendLyrics({
@@ -127,7 +132,7 @@ async function fetchLyricsForMiniPlayer(nowPlaying: NowPlaying, ep: ElectronPlat
         lines: result.lines.map((l) => ({
           timeMs: l.timeMs,
           text: l.text,
-          romanized: getLineRomanized(l.text, l.romanized),
+          romanized: l.romanized || undefined,
           translation: l.translation || undefined,
         })),
       });
@@ -304,7 +309,7 @@ export function useMediaSession(): void {
       }
     });
 
-    // 4. Periodic position reporting for mini-player scrubber
+    // 4. Periodic position reporting for mini-player scrubber (250ms for low-drift 60fps alignment)
     const progressTimer = setInterval(() => {
       const p = usePlayer.getState();
       if (p.status === 'playing' && ep?.sendMediaState && p.nowPlaying) {
@@ -327,14 +332,29 @@ export function useMediaSession(): void {
           videoAspect: videoState.aspect || (16 / 9),
         });
       }
-    }, 1000);
+    }, 250);
 
-    // 5. Initialize WebRTC loopback stream for floating mini-player music video
+    // 5. Keep PIP lyrics strictly synchronized if provider is switched in maximized UI
+    let unsubUi: (() => void) | undefined;
+    void import('@/lyrics/useLyrics').then(({ useLyricsUi }) => {
+      unsubUi = useLyricsUi.subscribe((state, prev) => {
+        const currentNow = usePlayer.getState().nowPlaying;
+        if (!currentNow?.videoId) return;
+        const id = currentNow.videoId;
+        if (state.picked[id] !== prev.picked[id]) {
+          lastFetchedLyricsVideoId = '';
+          void fetchLyricsForMiniPlayer(currentNow, ep);
+        }
+      });
+    });
+
+    // 6. Initialize WebRTC loopback stream for floating mini-player music video
     const cleanupStream = initMiniPlayerStream();
 
     return () => {
       cleanupCommands?.();
       clearInterval(progressTimer);
+      unsubUi?.();
       cleanupStream();
       unsubscribe();
     };

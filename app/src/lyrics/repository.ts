@@ -4,7 +4,7 @@ import type { Parsed } from './parse';
 import * as providers from './providers';
 import { enabledSources, useLyricsSettings } from './settings';
 import { artistForLyricsSearch, forLyricsSearch, sourceById, type LyricsSourceId } from './sources';
-import { autoTranslateLyrics } from './translate';
+import { autoEnrichLyrics } from './translate';
 import { writeTtml } from './ttml';
 
 /**
@@ -183,11 +183,11 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
     let single = await run(sequence[0]!);
     if (single && single.lines.length) {
       const current = single;
-      const translated = await autoTranslateLyrics(current.lines).catch(() => current.lines);
+      const enriched = await autoEnrichLyrics(current.lines).catch(() => current.lines);
       single = {
         ...current,
-        lines: translated,
-        ttml: writeTtml(translated),
+        lines: enriched,
+        ttml: writeTtml(enriched),
       };
     }
     cache.set(key, { at: Date.now(), result: single });
@@ -249,11 +249,11 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
 
   if (winner && winner.lines.length) {
     const current = winner;
-    const translated = await autoTranslateLyrics(current.lines).catch(() => current.lines);
+    const enriched = await autoEnrichLyrics(current.lines).catch(() => current.lines);
     winner = {
       ...current,
-      lines: translated,
-      ttml: writeTtml(translated),
+      lines: enriched,
+      ttml: writeTtml(enriched),
     };
   }
 
