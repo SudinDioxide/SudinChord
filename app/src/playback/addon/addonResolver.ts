@@ -1,4 +1,5 @@
 import { addonStore, type AddonTrack, type AddonStreamResult, type InstalledAddon } from '@/data/addon/addonManager';
+import { resolveClashFlacTrack, getClashFlacConfig } from './clashflacResolver';
 
 export interface ResolvedLosslessTrack {
   url: string;
@@ -155,13 +156,21 @@ export async function resolveLosslessTrack({
   const state = addonStore.getState();
   if (!state.losslessEnabled) return null;
 
-  const enabledAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
-  if (enabledAddons.length === 0) return null;
-
   const sTitle = cleanTitle(title || '');
   const sArtist = cleanArtist(artist || '');
   if (!sTitle) return null;
 
+  // 1. Check built-in ClashFLAC / Qobuz / Tidal / JioSaavn resolver
+  const clashConfig = getClashFlacConfig();
+  if (clashConfig.enabled) {
+    try {
+      const clashMatch = await resolveClashFlacTrack({ title: sTitle, artist: sArtist, durationSec });
+      if (clashMatch) return clashMatch;
+    } catch {}
+  }
+
+  // 2. Check user-configured custom addons
+  const enabledAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
   for (const addon of enabledAddons) {
     const match = await querySingleAddon(addon, sTitle, sArtist, durationSec);
     if (match) return match;
