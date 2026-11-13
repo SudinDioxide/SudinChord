@@ -86,6 +86,7 @@ function parseVorbis(bytes, offset, blockLen) {
 /** Fast metadata extractor: reads only up to 128KB from disk */
 async function extractMetadata(filePath) {
   const fileName = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
   const fnMeta = parseFileName(fileName);
   const result = {
     title: fnMeta.title,
@@ -93,11 +94,20 @@ async function extractMetadata(filePath) {
     album: null,
     durationSec: null,
     hasArtwork: false,
+    formatInfo: {
+      codec: ext.replace('.', '').toUpperCase(),
+      bitDepth: 16,
+      sampleRate: 44100,
+      isHiRes: false,
+    },
+    fileSize: 0,
   };
 
   let fd = null;
   try {
     fd = await fs.promises.open(filePath, 'r');
+    const stat = await fd.stat();
+    result.fileSize = stat.size;
     const buf = Buffer.alloc(131072); // 128 KB
     const { bytesRead } = await fd.read(buf, 0, 131072, 0);
     const bytes = buf.subarray(0, bytesRead);
@@ -177,6 +187,7 @@ async function extractMetadata(filePath) {
         if (blockType === 0 && p + 34 <= bytes.length) {
           // STREAMINFO: exact duration in samples
           const sampleRate = (bytes[p + 10] << 12) | (bytes[p + 11] << 4) | (bytes[p + 12] >> 4);
+          const bitsPerSample = (((bytes[p + 12] & 0x01) << 4) | (bytes[p + 13] >> 4)) + 1;
           const totalSamples =
             (bytes[p + 13] & 0x0f) * 4294967296 +
             (bytes[p + 14] << 24) +
@@ -186,6 +197,12 @@ async function extractMetadata(filePath) {
           if (sampleRate > 0 && totalSamples > 0) {
             result.durationSec = Math.round(totalSamples / sampleRate);
           }
+          result.formatInfo = {
+            codec: 'FLAC',
+            bitDepth: bitsPerSample || 16,
+            sampleRate: sampleRate || 44100,
+            isHiRes: (bitsPerSample && bitsPerSample > 16) || (sampleRate && sampleRate >= 88200),
+          };
         } else if (blockType === 4) {
           // VORBIS_COMMENT
           const tags = parseVorbis(bytes, p, blockLen);
@@ -248,6 +265,68 @@ async function extractMetadata(filePath) {
     }
     if (bytes.indexOf('alac') !== -1) {
       result.isAlac = true;
+      result.formatInfo = {
+        codec: 'ALAC',
+        bitDepth: 24,
+        sampleRate: 48000,
+        isHiRes: true,
+      };
+    }
+    if (bytes.indexOf('METADATA_BLOCK_PICTURE') !== -1) {
+      result.hasArtwork = true;
+      result.formatInfo = {
+        codec: 'OGG',
+        bitDepth: 16,
+        sampleRate: 44100,
+        isHiRes: false,
+      };
+    }
+
+    // Check RIFF WAVE header ('RIFF' ... 'WAVE')
+    if (bytes.length >= 36 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WAVE') {
+      const fmtIdx = bytes.indexOf('fmt ');
+      let byteRate = 0;
+      let sampleRate = 44100;
+      let bitsPerSample = 16;
+      if (fmtIdx !== -1 && fmtIdx + 24 <= bytes.length) {
+        sampleRate = bytes.readUInt32LE(fmtIdx + 12);
+        byteRate = bytes.readUInt32LE(fmtIdx + 16);
+        bitsPerSample = bytes.readUInt16LE(fmtIdx + 22);
+      }
+      result.formatInfo = {
+        codec: 'WAV',
+        bitDepth: bitsPerSample || 16,
+        sampleRate: sampleRate || 44100,
+        isHiRes: (bitsPerSample && bitsPerSample > 16) || (sampleRate && sampleRate >= 88200),
+      };
+      const dataIdx = bytes.indexOf('data');
+      if (dataIdx !== -1 && dataIdx + 8 <= bytes.length && byteRate > 0) {
+        const dataLen = bytes.readUInt32LE(dataIdx + 4);
+        if (dataLen > 0) {
+          result.durationSec = Math.round(dataLen / byteRate);
+        }
+      }
+      if (!result.durationSec && byteRate > 0) {
+        try {
+          const stat = await fs.promises.stat(filePath);
+          result.durationSec = Math.round((stat.size - (dataIdx !== -1 ? dataIdx + 8 : 44)) / byteRate);
+        } catch {}
+      }
+
+      // Check WAV tail for ID3 APIC chunk
+      if (!result.hasArtwork && fd) {
+        try {
+          const stat = await fd.stat();
+          if (stat.size > 8192) {
+            const tailSize = Math.min(stat.size, 2097152); // check last 2MB for APIC
+            const tailBuf = Buffer.alloc(tailSize);
+            await fd.read(tailBuf, 0, tailSize, stat.size - tailSize);
+            if (tailBuf.indexOf('APIC') !== -1) {
+              result.hasArtwork = true;
+            }
+          }
+        } catch {}
+      }
     }
   } catch {
     // Ignore and return whatever we got
@@ -255,12 +334,15 @@ async function extractMetadata(filePath) {
     if (fd) await fd.close().catch(() => {});
   }
 
-  // If no embedded artwork, check folder for cover.jpg / folder.jpg
+  // Check for track-specific companion art: <song_title>.jpg, <song_title>.png
+  // NOTE: We deliberately do NOT fall back to generic folder.jpg / cover.jpg here
+  // because in multi-track/multi-album folders, generic folder art incorrectly
+  // copies one song's album art across unrelated tracks.
   if (!result.hasArtwork) {
     try {
-      const dir = path.dirname(filePath);
-      for (const name of ART_NAMES) {
-        if (fs.existsSync(path.join(dir, name))) {
+      const parsed = path.parse(filePath);
+      for (const imgExt of ['.jpg', '.jpeg', '.png', '.webp']) {
+        if (fs.existsSync(path.join(parsed.dir, `${parsed.name}${imgExt}`))) {
           result.hasArtwork = true;
           break;
         }
@@ -420,25 +502,94 @@ async function extractArtwork(filePath) {
         const flags = bytes.readUInt32BE(dataIdx + 4);
         const mime = (flags & 0xff) === 14 ? 'image/png' : 'image/jpeg';
         const dataLen = size - 16;
-        if (dataLen > 0 && dataIdx + 12 + dataLen <= bytes.length) {
-          return cacheAndReturn({ buffer: bytes.subarray(dataIdx + 12, dataIdx + 12 + dataLen), mime });
+        if (dataLen > 0) {
+          if (dataIdx + 12 + dataLen <= bytes.length) {
+            return cacheAndReturn({ buffer: bytes.subarray(dataIdx + 12, dataIdx + 12 + dataLen), mime });
+          } else if (fd && stat.size >= dataIdx + 12 + dataLen) {
+            // Read large embedded art (e.g. 15MB PNG)
+            const covrBuf = Buffer.alloc(dataLen);
+            await fd.read(covrBuf, 0, dataLen, dataIdx + 12);
+            return cacheAndReturn({ buffer: covrBuf, mime });
+          }
         }
       }
     }
+
+    // Check OGG Vorbis comment for METADATA_BLOCK_PICTURE
+    const picTag = 'METADATA_BLOCK_PICTURE=';
+    const picTagIdx = bytes.indexOf(Buffer.from(picTag));
+    if (picTagIdx !== -1) {
+      try {
+        let tagEnd = picTagIdx + picTag.length;
+        while (tagEnd < bytes.length && bytes[tagEnd] !== 0 && bytes[tagEnd] !== 0x0a && bytes[tagEnd] !== 0x0d) tagEnd++;
+        const base64Str = bytes.subarray(picTagIdx + picTag.length, tagEnd).toString('ascii').trim();
+        const picBytes = Buffer.from(base64Str, 'base64');
+        if (picBytes.length > 32) {
+          const mimeLen = picBytes.readUInt32BE(4);
+          const mime = picBytes.subarray(8, 8 + mimeLen).toString('ascii') || 'image/jpeg';
+          const descLen = picBytes.readUInt32BE(8 + mimeLen);
+          const dataOffset = 8 + mimeLen + 4 + descLen + 16;
+          const dataLen = picBytes.readUInt32BE(dataOffset);
+          const imgBuf = picBytes.subarray(dataOffset + 4, dataOffset + 4 + dataLen);
+          if (imgBuf.length > 0) {
+            return cacheAndReturn({ buffer: imgBuf, mime });
+          }
+        }
+      } catch {}
+    }
+
+    // Check WAV files for ID3 APIC chunk in tail if not in header
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.wav' && fd && stat.size > 8192) {
+      try {
+        const tailSize = Math.min(stat.size, 15728640); // check up to 15MB from tail
+        const tailBuf = Buffer.alloc(tailSize);
+        await fd.read(tailBuf, 0, tailSize, stat.size - tailSize);
+        const apicIdx = tailBuf.indexOf('APIC');
+        if (apicIdx !== -1 && apicIdx + 10 < tailBuf.length) {
+          const frameSize = tailBuf.readUInt32BE(apicIdx + 4);
+          if (frameSize > 0 && apicIdx + 10 + frameSize <= tailBuf.length) {
+            const frameData = tailBuf.subarray(apicIdx + 10, apicIdx + 10 + frameSize);
+            const enc = frameData[0] || 0;
+            let q = 1;
+            let mime = '';
+            while (q < frameData.length && frameData[q] !== 0) {
+              mime += String.fromCharCode(frameData[q]);
+              q++;
+            }
+            q++;
+            if (!mime) mime = 'image/jpeg';
+            q++;
+            if (enc === 1 || enc === 2) {
+              while (q + 1 < frameData.length && !(frameData[q] === 0 && frameData[q + 1] === 0)) q += 2;
+              q += 2;
+            } else {
+              while (q < frameData.length && frameData[q] !== 0) q++;
+              q++;
+            }
+            if (q < frameData.length) {
+              return cacheAndReturn({ buffer: frameData.subarray(q), mime });
+            }
+          }
+        }
+      } catch {}
+    }
   } catch {
-    // Fall back to folder art
+    // Fall back to companion art
   } finally {
     if (fd) await fd.close().catch(() => {});
   }
 
-  // Check folder cover art
+  // Check track-specific companion cover art: <song_title>.jpg, <song_title>.png
+  // NOTE: We deliberately do NOT fall back to generic folder.jpg / cover.jpg here
+  // because in multi-track/multi-album folders, generic folder art incorrectly
+  // copies one song's album art across unrelated tracks.
   try {
-    const dir = path.dirname(filePath);
-    for (const name of ART_NAMES) {
-      const full = path.join(dir, name);
+    const parsed = path.parse(filePath);
+    for (const imgExt of ['.jpg', '.jpeg', '.png', '.webp']) {
+      const full = path.join(parsed.dir, `${parsed.name}${imgExt}`);
       if (fs.existsSync(full)) {
-        const ext = path.extname(name).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+        const mime = imgExt === '.png' ? 'image/png' : imgExt === '.webp' ? 'image/webp' : 'image/jpeg';
         const buffer = await fs.promises.readFile(full);
         return cacheAndReturn({ buffer, mime });
       }

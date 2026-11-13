@@ -18,6 +18,13 @@ export interface ScannedTrackItem {
   album?: string | null;
   durationSec?: number | null;
   hasArtwork?: boolean;
+  formatInfo?: {
+    codec: string;
+    bitDepth?: number;
+    sampleRate?: number;
+    isHiRes?: boolean;
+  } | null;
+  fileSize?: number;
 }
 
 const FOLDER_STORAGE_KEY = 'sudinchord_local_music_folder';
@@ -28,6 +35,30 @@ export function getSavedMusicFolder(): string | null {
   } catch {
     return null;
   }
+}
+
+export function inferFormatInfo(filePath: string, formatInfo?: ScannedTrackItem['formatInfo']): NonNullable<ScannedTrackItem['formatInfo']> {
+  if (formatInfo && formatInfo.codec) return formatInfo;
+  const ext = (filePath.split('.').pop() || '').toLowerCase();
+  if (ext === 'flac') {
+    return { codec: 'flac', isHiRes: false, bitDepth: 16, sampleRate: 44100 };
+  }
+  if (ext === 'wav') {
+    return { codec: 'wav', isHiRes: false, bitDepth: 16, sampleRate: 44100 };
+  }
+  if (ext === 'm4a' || ext === 'aac') {
+    return { codec: 'm4a', isHiRes: false };
+  }
+  if (ext === 'alac') {
+    return { codec: 'alac', isHiRes: false, bitDepth: 16, sampleRate: 44100 };
+  }
+  if (ext === 'ogg' || ext === 'opus') {
+    return { codec: 'ogg', isHiRes: false };
+  }
+  if (ext === 'mp3') {
+    return { codec: 'mp3', isHiRes: false };
+  }
+  return { codec: ext || 'audio', isHiRes: false };
 }
 
 function getLocalMediaOrigin(): string {
@@ -154,6 +185,8 @@ class LocalTracksManager {
       const url = `${origin}/local-file?path=${encodeURIComponent(item.filePath)}`;
       const thumbnail = item.hasArtwork ? `${url}&art=1` : null;
 
+      const resolvedFormat = inferFormatInfo(item.filePath, item.formatInfo);
+
       const track: Track = {
         videoId,
         title: item.title,
@@ -164,6 +197,9 @@ class LocalTracksManager {
         thumbnail,
         index: this.items.size + 1,
         plays: null,
+        filePath: item.filePath,
+        fileSize: item.fileSize,
+        formatInfo: resolvedFormat,
       };
 
       this.items.set(videoId, {
@@ -231,6 +267,9 @@ class LocalTracksManager {
         thumbnail: meta.artworkBlobUrl,
         index: this.items.size + 1,
         plays: null,
+        filePath: nativePath || undefined,
+        fileSize: file.size,
+        formatInfo: inferFormatInfo(nativePath || file.name),
       };
 
       this.items.set(videoId, {
@@ -315,25 +354,7 @@ class LocalTracksManager {
         }
       } catch {}
 
-      if (!meta.artworkBlobUrl && isElectron) {
-        try {
-          const dir = filePath.replace(/[/\\][^/\\]+$/, '');
-          if (folderArtCache.has(dir)) {
-            meta.artworkBlobUrl = folderArtCache.get(dir) || null;
-          } else {
-            const ep = (
-              window as unknown as {
-                electronPlatform?: { getFolderArt?: (d: string) => Promise<string | null> };
-              }
-            ).electronPlatform;
-            const folderArt = (await ep?.getFolderArt?.(dir)) || null;
-            folderArtCache.set(dir, folderArt);
-            if (folderArt) {
-              meta.artworkBlobUrl = folderArt;
-            }
-          }
-        } catch {}
-      }
+
 
       const durationSec = await getAudioDuration(url);
 
@@ -347,6 +368,8 @@ class LocalTracksManager {
         thumbnail: meta.artworkBlobUrl,
         index: this.items.size + 1,
         plays: null,
+        filePath,
+        formatInfo: inferFormatInfo(filePath),
       };
 
       this.items.set(videoId, {

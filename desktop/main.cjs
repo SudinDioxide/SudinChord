@@ -9,7 +9,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { execFileSync } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 const { Readable } = require('node:stream');
 const { pathToFileURL } = require('node:url');
 const ytAuth = require('./ytAuth.cjs');
@@ -43,8 +43,13 @@ function loadMetadataCache() {
     const p = getMetadataCachePath();
     if (fs.existsSync(p)) {
       const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-      for (const [k, v] of Object.entries(data)) {
-        metadataCache.set(k, v);
+      if (data && data.__v === 3) {
+        for (const [k, v] of Object.entries(data)) {
+          if (k !== '__v') metadataCache.set(k, v);
+        }
+      } else {
+        // Invalidate stale cache from previous versions that lacked formatInfo / had false artwork flags
+        metadataCacheDirty = true;
       }
     }
   } catch { }
@@ -55,7 +60,7 @@ function saveMetadataCache() {
   metadataCacheDirty = false;
   try {
     const p = getMetadataCachePath();
-    const obj = {};
+    const obj = { __v: 3 };
     for (const [k, v] of metadataCache.entries()) {
       obj[k] = v;
     }
@@ -68,7 +73,7 @@ async function getCachedOrExtractMetadata(f) {
   try {
     const stat = await fs.promises.stat(f);
     const cached = metadataCache.get(f);
-    if (cached && cached.mtimeMs === stat.mtimeMs && cached.meta) {
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.meta && cached.meta.formatInfo) {
       return cached.meta;
     }
     const meta = await extractMetadata(f);
@@ -97,48 +102,160 @@ function getFfmpegPath() {
   return null;
 }
 
-function isAlacFile(filePath) {
+const transcodePromises = new Map();
+
+function needsAudioTranscoding(filePath) {
   try {
-    const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(16384);
-    const read = fs.readSync(fd, buf, 0, 16384, 0);
-    fs.closeSync(fd);
-    return buf.subarray(0, read).indexOf('alac') !== -1;
+    const ext = path.extname(filePath).toLowerCase();
+
+    // 1. WAV: check if it's 24-bit/32-bit PCM or IEEE float (Chromium only supports 8/16-bit PCM)
+    if (ext === '.wav') {
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(4096);
+      const read = fs.readSync(fd, buf, 0, 4096, 0);
+      fs.closeSync(fd);
+      if (read >= 36 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WAVE') {
+        const fmtIdx = buf.indexOf('fmt ');
+        if (fmtIdx !== -1 && fmtIdx + 24 <= read) {
+          const format = buf.readUInt16LE(fmtIdx + 8);
+          const bitsPerSample = buf.readUInt16LE(fmtIdx + 22);
+          if (bitsPerSample > 16 || format === 3 || format === 0xFFFE) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // 2. M4A / MP4: check if it contains ALAC, FLAC, or non-AAC codec (Chromium only supports AAC/Opus in MP4)
+    if (ext === '.m4a' || ext === '.mp4') {
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(524288); // 512 KB
+      const read = fs.readSync(fd, buf, 0, 524288, 0);
+      fs.closeSync(fd);
+      const slice = buf.subarray(0, read);
+      if (slice.indexOf('alac') !== -1 || slice.indexOf('fLaC') !== -1) {
+        return true;
+      }
+      if (slice.indexOf('moov') !== -1 && slice.indexOf('soun') !== -1 && slice.indexOf('mp4a') === -1) {
+        return true;
+      }
+      return false;
+    }
+
+    // 3. FLAC: check if it contains corrupted PICTURE metadata block (mimeLen === 0 causes Chromium decode crash)
+    if (ext === '.flac') {
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(262144); // 256 KB
+      const read = fs.readSync(fd, buf, 0, 262144, 0);
+      fs.closeSync(fd);
+      if (read >= 4 && buf.subarray(0, 4).toString('ascii') === 'fLaC') {
+        let offset = 4;
+        let isLast = false;
+        while (!isLast && offset + 4 <= read) {
+          const h0 = buf[offset];
+          isLast = (h0 & 0x80) !== 0;
+          const blockType = h0 & 0x7f;
+          const blockLen = (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3];
+          if (blockType === 6) { // PICTURE
+            const pOffset = offset + 4;
+            if (pOffset + 8 <= read) {
+              const mimeLen = buf.readUInt32BE(pOffset + 4);
+              if (mimeLen === 0) return true;
+            }
+          }
+          offset += 4 + blockLen;
+        }
+      }
+      return false;
+    }
+
+    // 4. Other formats unsupported natively by Chromium HTML5 audio
+    if (['.wma', '.aif', '.aiff', '.ape', '.dts'].includes(ext)) {
+      return true;
+    }
   } catch {
     return false;
   }
+  return false;
 }
 
-function getOrTranscodeAlac(filePath) {
+function isAlacFile(filePath) {
+  return needsAudioTranscoding(filePath);
+}
+
+async function getOrTranscodeAudio(filePath) {
   try {
     let cacheDir;
     try {
-      cacheDir = path.join(app.getPath('temp'), 'sudinchord_alac_cache');
+      cacheDir = path.join(app.getPath('temp'), 'sudinchord_audio_cache');
     } catch {
       cacheDir = path.join(__dirname, 'temp_cache');
     }
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
+
     const hash = crypto.createHash('md5').update(filePath).digest('hex');
     const cachedWav = path.join(cacheDir, `${hash}.wav`);
-    if (fs.existsSync(cachedWav)) {
+    if (fs.existsSync(cachedWav) && fs.statSync(cachedWav).size > 1000) {
       return cachedWav;
     }
-    const ffmpeg = getFfmpegPath();
-    if (ffmpeg) {
-      execFileSync(ffmpeg, ['-i', filePath, '-c:a', 'pcm_s16le', '-y', cachedWav], {
-        stdio: 'ignore',
-        timeout: 45000,
-      });
-      if (fs.existsSync(cachedWav)) {
-        return cachedWav;
-      }
+
+    // Deduplicate concurrent transcoding requests for the same audio file
+    if (transcodePromises.has(cachedWav)) {
+      return await transcodePromises.get(cachedWav);
     }
+
+    const ffmpeg = getFfmpegPath();
+    if (!ffmpeg) {
+      console.warn('[Desktop] Transcoder: ffmpeg not found, using original file:', filePath);
+      return filePath;
+    }
+
+    const promise = (async () => {
+      const tmpWav = path.join(cacheDir, `${hash}.tmp_${Date.now()}.wav`);
+      try {
+        await new Promise((resolve, reject) => {
+          execFile(
+            ffmpeg,
+            ['-i', filePath, '-c:a', 'pcm_s16le', '-y', tmpWav],
+            { timeout: 60000, windowsHide: true },
+            (err) => {
+              if (err && !fs.existsSync(tmpWav)) return reject(err);
+              resolve();
+            }
+          );
+        });
+
+        if (fs.existsSync(tmpWav) && fs.statSync(tmpWav).size > 1000) {
+          try {
+            if (fs.existsSync(cachedWav)) fs.unlinkSync(cachedWav);
+          } catch {}
+          fs.renameSync(tmpWav, cachedWav);
+          return cachedWav;
+        }
+      } catch (err) {
+        console.error('[Desktop] Audio transcoding failed for:', filePath, err);
+        try {
+          if (fs.existsSync(tmpWav)) fs.unlinkSync(tmpWav);
+        } catch {}
+      } finally {
+        transcodePromises.delete(cachedWav);
+      }
+      return filePath;
+    })();
+
+    transcodePromises.set(cachedWav, promise);
+    return await promise;
   } catch (err) {
-    console.error('[Desktop] Transcoding ALAC error:', err);
+    console.error('[Desktop] Transcoding error:', err);
+    return filePath;
   }
-  return filePath;
+}
+
+function getOrTranscodeAlac(filePath) {
+  return getOrTranscodeAudio(filePath);
 }
 
 // Register local-audio scheme before app is ready
@@ -196,7 +313,7 @@ const MIME_TYPES = {
 
 function startLocalServer() {
   return new Promise((resolve) => {
-    staticServer = http.createServer((req, res) => {
+    staticServer = http.createServer(async (req, res) => {
       const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
 
       const corsHeaders = {
@@ -252,9 +369,8 @@ function startLocalServer() {
         }
 
         let streamPath = targetPath;
-        const ext = path.extname(targetPath).toLowerCase();
-        if (ext === '.m4a' && isAlacFile(targetPath)) {
-          streamPath = getOrTranscodeAlac(targetPath);
+        if (needsAudioTranscoding(targetPath)) {
+          streamPath = await getOrTranscodeAudio(targetPath);
         }
 
         let stat;
@@ -895,6 +1011,8 @@ ipcMain.handle('local:open-folder', async () => {
           album: meta.album,
           durationSec: meta.durationSec,
           hasArtwork: meta.hasArtwork,
+          formatInfo: meta.formatInfo,
+          fileSize: meta.fileSize,
         };
       }),
     );
@@ -940,6 +1058,8 @@ ipcMain.handle('local:scan-folder', async (_event, folderPath) => {
           album: meta.album,
           durationSec: meta.durationSec,
           hasArtwork: meta.hasArtwork,
+          formatInfo: meta.formatInfo,
+          fileSize: meta.fileSize,
         };
       }),
     );
@@ -967,6 +1087,8 @@ ipcMain.handle('local:parse-files', async (_event, filePaths) => {
           album: meta.album,
           durationSec: meta.durationSec,
           hasArtwork: meta.hasArtwork,
+          formatInfo: meta.formatInfo,
+          fileSize: meta.fileSize,
         };
       }),
     );
@@ -976,21 +1098,23 @@ ipcMain.handle('local:parse-files', async (_event, filePaths) => {
   return tracks;
 });
 
-ipcMain.handle('local:get-folder-art', async (_event, dirPath) => {
-  if (!dirPath || typeof dirPath !== 'string' || !fs.existsSync(dirPath)) return null;
-  const artNames = [
-    'cover.jpg', 'cover.jpeg', 'cover.png',
-    'folder.jpg', 'folder.jpeg', 'folder.png',
-    'album.jpg', 'album.jpeg', 'album.png',
-    'front.jpg', 'front.jpeg', 'front.png',
-    'artwork.jpg', 'artwork.png',
-  ];
-  for (const name of artNames) {
-    const full = path.join(dirPath, name);
-    if (fs.existsSync(full)) {
-      return `local-audio://stream?path=${encodeURIComponent(full)}`;
-    }
+ipcMain.handle('local:reveal-file', async (_event, filePath) => {
+  if (filePath && typeof filePath === 'string' && fs.existsSync(filePath)) {
+    shell.showItemInFolder(filePath);
+    return true;
   }
+  return false;
+});
+
+ipcMain.handle('local:reveal-folder', async (_event, folderPath) => {
+  if (folderPath && typeof folderPath === 'string' && fs.existsSync(folderPath)) {
+    shell.openPath(folderPath);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('local:get-folder-art', async () => {
   return null;
 });
 

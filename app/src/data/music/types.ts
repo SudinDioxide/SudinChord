@@ -72,6 +72,14 @@ export interface Track {
    * Music version yet: still being looked for, or not found. Shown, never played.
    */
   unavailable?: 'matching' | 'missing';
+  filePath?: string;
+  fileSize?: number;
+  formatInfo?: {
+    codec: string;
+    bitDepth?: number;
+    sampleRate?: number;
+    isHiRes?: boolean;
+  } | null;
 }
 
 export interface HeaderInfo {

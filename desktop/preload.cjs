@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electronPlatform', {
   scanLocalFolder: (folderPath) => ipcRenderer.invoke('local:scan-folder', folderPath),
   parseLocalFiles: (filePaths) => ipcRenderer.invoke('local:parse-files', filePaths),
   getFolderArt: (dirPath) => ipcRenderer.invoke('local:get-folder-art', dirPath),
+  revealLocalFile: (filePath) => ipcRenderer.invoke('local:reveal-file', filePath),
+  revealLocalFolder: (folderPath) => ipcRenderer.invoke('local:reveal-folder', folderPath),
   getPathForFile: (file) => (webUtils ? webUtils.getPathForFile(file) : file?.path || null),
   // Picture-in-Picture & Mini-Player Video Streaming
   sendPipOffer: (offer) => ipcRenderer.send('pip:offer', offer),

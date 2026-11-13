@@ -8,6 +8,7 @@ import { usePlayer } from '@/state/player';
 import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
 import { albumHref, artistHref, formatDuration } from './links';
+import { inferFormatInfo } from '@/playback/local/localTracks';
 import { playList, playTrack, type ListContext } from './play';
 import { TrackMenu } from './TrackMenu';
 
@@ -30,6 +31,8 @@ interface TrackListProps {
   source?: ListContext['source'];
   /** Called to remove a track from a playlist. */
   onRemoveTrack?: (index: number, track: Track) => void;
+  /** When true, omits the horizontal body gutter margin. */
+  noGutter?: boolean;
 }
 
 /* Track lists (report §3 album rows, §14 playlist rows). */
@@ -87,6 +90,32 @@ const time: Record<Variant, string> = {
   playlist: 'relative justify-end pe-[18px] type-body tabular-nums',
 };
 
+function AudioFormatBadge({ formatInfo }: { formatInfo: NonNullable<Track['formatInfo']> }) {
+  const isHiRes = formatInfo.isHiRes || (formatInfo.sampleRate && formatInfo.sampleRate > 48000);
+  const is24Bit = !isHiRes && formatInfo.bitDepth && formatInfo.bitDepth > 16;
+
+  // Standard 16-bit / 44.1kHz audio doesn't need a noisy badge in the track row
+  if (!isHiRes && !is24Bit) return null;
+
+  const sampleText = formatInfo.sampleRate ? `${Math.round(formatInfo.sampleRate / 1000)}kHz` : '';
+  const bitText = formatInfo.bitDepth ? `${formatInfo.bitDepth}-bit` : '';
+  const codecUpper = (formatInfo.codec || '').toUpperCase();
+  const tooltip = `${codecUpper} ${bitText} ${sampleText}`.trim();
+
+  return (
+    <span
+      className={`mx-2 inline-flex items-center rounded-[4px] px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider shrink-0 select-none ${
+        isHiRes
+          ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+          : 'bg-white/10 text-secondary border border-white/15'
+      }`}
+      title={tooltip}
+    >
+      {isHiRes ? 'HI-RES' : '24-BIT'}
+    </span>
+  );
+}
+
 interface RowProps {
   track: Track;
   variant: Variant;
@@ -117,7 +146,7 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTra
         onPlay();
       }}
     >
-      <div className={`${cell} gap-3`}>
+      <div className={`${cell} gap-3 pe-6`}>
         <div className={`relative grid w-10 shrink-0 place-items-center${variant === 'playlist' ? ' ms-[7px]' : ''}`}>
           {variant === 'playlist' ? (
             <>
@@ -160,6 +189,10 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTra
           <div className="flex min-w-0 items-center">
             <span className="truncate type-body text-primary">{track.title}</span>
             {track.explicit && <ExplicitBadge />}
+            {(() => {
+              const fi = track.formatInfo || (track.filePath || track.videoId?.startsWith('local:') ? inferFormatInfo(track.filePath || track.videoId.slice(6)) : null);
+              return fi ? <AudioFormatBadge formatInfo={fi} /> : null;
+            })()}
           </div>
           {variant === 'album' && track.artists.length > 0 && (
             <div className="truncate type-callout">
@@ -199,7 +232,7 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTra
             {onRemoveTrack && (
               <button
                 type="button"
-                className="grid size-7 place-items-center rounded-full text-secondary hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+                className="grid size-7 place-items-center rounded-[8px] text-secondary hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
                 title="Remove from playlist"
                 aria-label={`Remove ${track.title} from playlist`}
                 onClick={(e) => {
@@ -212,7 +245,7 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTra
             )}
             <TrackMenu
               track={track}
-              className="grid size-7 place-items-center rounded-full text-key hover:bg-quinary cursor-pointer data-open:grid"
+              className="grid size-7 place-items-center rounded-[8px] text-key hover:bg-quinary cursor-pointer data-open:grid"
               onRemoveFromPlaylist={onRemoveTrack}
             />
           </div>
@@ -224,8 +257,8 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow, onRemoveTra
 
 function Header() {
   return (
-    <div className={`grid h-8 items-center ${playlistColumns} type-callout-emphasized text-secondary max-md:hidden`} aria-hidden="true">
-      <div className={`${cell} gap-3 ps-[7px]`}>Song</div>
+    <div className={`grid h-8 items-center ${playlistColumns} type-callout-emphasized text-secondary max-md:hidden border-b border-quaternary/50 pb-2 mb-1`} aria-hidden="true">
+      <div className={`${cell} gap-3 ps-[7px] pe-6`}>Song</div>
       <div className={secondary}>Artist</div>
       <div className={tertiary}>Album</div>
       <div className={`${cell} ${time.playlist}`}>Time</div>
@@ -238,7 +271,7 @@ function Header() {
  * hover fill, the number (or artwork) turning into a play button. Long lists
  * are virtualized against the page's scroll container (prompt §3).
  */
-export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source, onRemoveTrack }: TrackListProps) {
+export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source, onRemoveTrack, noGutter }: TrackListProps) {
   const playRow = (i: number) => {
     // Rows from another catalogue that found no YouTube Music song stay out of the queue.
     if (source) {
@@ -269,7 +302,7 @@ export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, o
   }, [last?.index, tracks.length, virtual, onNearEnd]);
 
   return (
-    <div className="mx-(--body-gutter) type-callout text-secondary" data-variant={variant} role="table" aria-label="Songs">
+    <div className={`${noGutter ? '' : 'mx-(--body-gutter) '}type-callout text-secondary`} data-variant={variant} role="table" aria-label="Songs">
       {variant === 'playlist' && <Header />}
       <div ref={container}>
         {virtual ? (

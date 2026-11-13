@@ -11,7 +11,13 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 ## ✨ Highlights & Features
 
 - **Lossless Audio Streaming Addons:** Connect custom streaming endpoints (e.g. PencariMovie / Tidal / Qobuz backends) to stream studio-quality lossless FLAC directly.
-- **Enhanced Local Music Library:** Play local FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 files with full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding.
+- **Enhanced Local Music Library (v1.1.6):**
+  - **Modern Desktop UI:** Completely redesigned with Apple macOS-inspired geometry — crisp rounded rectangles (`rounded-[10px]`, `rounded-[8px]`, `rounded-[5px]`) replacing legacy pill/oval shapes.
+  - **Smart Badge Formatting:** Collision-free track rows with compact high-resolution indicators (`HI-RES`, `24-BIT`) and dedicated end-padding.
+  - **Albums & Artists Views:** Browse by album artwork with clean covers or by artist with modern squircle avatars.
+  - **Focused Album Detail View:** Dedicated view for album tracks with streamlined playback and shuffle controls.
+  - **Quick Folder Management:** One-click **Reveal** in File Explorer and instant **Rescan** for your local music folder.
+  - **Format Support:** Full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding for FLAC, ALAC, WAV, AAC, MP3, OGG, and OPUS.
 - **Automatic Library Resuming & Artwork Caching:** Automatically restores your last opened music folder upon app launch with in-memory LRU artwork caching and disk metadata caching.
 - **Comprehensive Playlist Management:**
   - Create and manage both **Offline Local Playlists** and **YouTube Music Cloud Playlists**.
@@ -28,7 +34,7 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-👉 **[Download SudinChord Setup 1.1.4.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.4/SudinChord.Setup.1.1.4.exe)**
+👉 **[Download SudinChord Setup 1.1.6.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.6/SudinChord.Setup.1.1.6.exe)**
 
 Or view all releases and release notes at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
 
@@ -72,7 +78,7 @@ pnpm desktop:build
 ```
 
 The output files will be created in `desktop/dist-electron/`:
-- `SudinChord-Setup-1.1.4.exe` (Windows NSIS Installer)
+- `SudinChord-Setup-1.1.6.exe` (Windows NSIS Installer)
 - `win-unpacked/SudinChord.exe` (Portable Windows Application)
 
 ---

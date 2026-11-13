@@ -63,7 +63,13 @@ async function main() {
   console.log('[pack-unpacked] Packing stage to app.asar...');
   await asar.createPackage(stageDir, targetAsar);
   fs.rmSync(stageDir, { recursive: true, force: true });
-  console.log('[pack-unpacked] Successfully updated app.asar with all dependencies!');
+
+  const targetBin = path.join(desktopDir, 'dist-electron', 'win-unpacked', 'resources', 'bin');
+  const srcBin = path.join(desktopDir, 'bin');
+  if (fs.existsSync(srcBin)) {
+    fs.cpSync(srcBin, targetBin, { recursive: true });
+  }
+  console.log('[pack-unpacked] Successfully updated app.asar with all dependencies and bin!');
 }
 
 main().catch(console.error);

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FolderPlus, ListEnd, ListPlus, ListStart, Moon, MoreHorizontal, Plus, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, FolderPlus, ListEnd, ListPlus, ListStart, Moon, MoreHorizontal, Plus, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { SiYoutube } from 'react-icons/si';
 import { Menu, MenuHeader, MenuItem, MenuSeparator, type MenuPlacement } from '@/components/Menu';
@@ -15,6 +15,7 @@ import { useAudioFx } from '@/state/audioFx';
 import { formatSleepRemaining, useSleepTimer, type SleepTimerMode } from '@/state/sleepTimer';
 import type { Track } from '@/data/music/types';
 import { usePlayer } from '@/state/player';
+import { getElectronPlatform } from '@/lib/electronPlatform';
 
 function PlaylistChoices({ track, onDone, onBack }: { track: Track; onDone: () => void; onBack: () => void }) {
   const options = usePlaylistOptions(track.videoId, true);
@@ -201,6 +202,24 @@ function TrackMenuItems({
       >
         Sleep Timer
       </MenuItem>
+      {(track.filePath || track.videoId?.startsWith('local:')) && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            icon={<Folder size={15} />}
+            onSelect={() => {
+              onClose();
+              const ep = getElectronPlatform();
+              const path = track.filePath || (track.videoId.startsWith('local:') ? track.videoId.replace(/^local:/, '') : null);
+              if (path && ep?.revealLocalFile) {
+                void ep.revealLocalFile(path);
+              }
+            }}
+          >
+            Show in File Explorer
+          </MenuItem>
+        </>
+      )}
       {onRemoveFromPlaylist && (
         <>
           <MenuSeparator />
