@@ -15,8 +15,8 @@ function getElectron(): ElectronPlatform | undefined {
 
 let miniPlayerOpen = false;
 let activePeerConnection: RTCPeerConnection | null = null;
+let currentStreamedVideoId: string | null = null;
 let surfaceClaimedByMini = false;
-let capturedStream: MediaStream | null = null;
 let isNegotiating = false;
 
 function ensureSurfaceAvailable(needed: boolean) {
@@ -34,25 +34,7 @@ function stopWebRTC() {
     activePeerConnection.close();
     activePeerConnection = null;
   }
-}
-
-function getMediaStream(): MediaStream | null {
-  const video = getVideoElement();
-  if (!video) return null;
-  const existingTrack = capturedStream?.getVideoTracks()[0];
-  if (capturedStream && existingTrack && existingTrack.readyState === 'live') {
-    return capturedStream;
-  }
-  const captureFn = video as unknown as {
-    captureStream?: (fps?: number) => MediaStream;
-    mozCaptureStream?: (fps?: number) => MediaStream;
-  };
-  capturedStream = captureFn.captureStream
-    ? captureFn.captureStream(30)
-    : captureFn.mozCaptureStream
-      ? captureFn.mozCaptureStream(30)
-      : null;
-  return capturedStream;
+  currentStreamedVideoId = null;
 }
 
 async function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 600): Promise<void> {
@@ -74,12 +56,16 @@ async function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 600): Prom
   });
 }
 
-async function startWebRTC() {
+async function startWebRTC(targetVideoId: string) {
   const ep = getElectron();
   if (!ep?.sendPipOffer) return;
 
-  // If already connected or connecting, keep streaming without interruption
-  if (activePeerConnection && (activePeerConnection.connectionState === 'connected' || activePeerConnection.connectionState === 'connecting')) {
+  // If already connected and already streaming this exact video, keep going
+  if (
+    currentStreamedVideoId === targetVideoId &&
+    activePeerConnection &&
+    (activePeerConnection.connectionState === 'connected' || activePeerConnection.connectionState === 'connecting')
+  ) {
     return;
   }
 
@@ -104,19 +90,44 @@ async function startWebRTC() {
       void video.play().catch(() => {});
     }
 
-    const stream = getMediaStream();
+    const captureFn = video as unknown as {
+      captureStream?: (fps?: number) => MediaStream;
+      mozCaptureStream?: (fps?: number) => MediaStream;
+    };
+    const stream: MediaStream | null = captureFn.captureStream
+      ? captureFn.captureStream(30)
+      : captureFn.mozCaptureStream
+        ? captureFn.mozCaptureStream(30)
+        : null;
+
     if (!stream) {
       console.warn('[MiniPlayerStream] captureStream is not supported or returned null');
       return;
     }
 
     const tracks = stream.getVideoTracks();
-    const firstTrack = tracks[0];
-    if (!firstTrack) {
+    const newTrack = tracks[0];
+    if (!newTrack) {
       console.warn('[MiniPlayerStream] No video tracks in captured stream');
       return;
     }
 
+    // 1. Try seamless track replacement if peer connection is already connected
+    if (activePeerConnection && activePeerConnection.connectionState === 'connected') {
+      const sender = activePeerConnection.getSenders().find((s) => s.track?.kind === 'video' || s.track === null);
+      if (sender) {
+        try {
+          await sender.replaceTrack(newTrack);
+          currentStreamedVideoId = targetVideoId;
+          console.log('[MiniPlayerStream] Seamlessly replaced video track for:', targetVideoId);
+          return;
+        } catch (err) {
+          console.warn('[MiniPlayerStream] replaceTrack failed, falling back to full renegotiation:', err);
+        }
+      }
+    }
+
+    // 2. Full renegotiation if not connected or replaceTrack failed
     stopWebRTC();
 
     const pc = new RTCPeerConnection({ iceServers: [] });
@@ -127,6 +138,7 @@ async function startWebRTC() {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         if (activePeerConnection === pc) {
           activePeerConnection = null;
+          currentStreamedVideoId = null;
         }
       }
     };
@@ -144,6 +156,7 @@ async function startWebRTC() {
     const fullOffer = pc.localDescription;
     if (fullOffer && activePeerConnection === pc) {
       ep.sendPipOffer({ type: fullOffer.type, sdp: fullOffer.sdp });
+      currentStreamedVideoId = targetVideoId;
     }
   } catch (err) {
     console.warn('[MiniPlayerStream] Failed to create complete offer:', err);
@@ -174,8 +187,10 @@ function syncMiniPlayerVideo() {
     aspect: videoState.aspect || 16 / 9,
   });
 
-  if (hasVideo) {
-    void startWebRTC();
+  if (hasVideo && currentVideoId) {
+    void startWebRTC(currentVideoId);
+  } else if (!hasVideo) {
+    currentStreamedVideoId = null;
   }
 }
 
