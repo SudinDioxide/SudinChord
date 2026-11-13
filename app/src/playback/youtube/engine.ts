@@ -102,6 +102,8 @@ export class YouTubeEngine {
   /** Raised when the engine upgraded the track mid-playback (e.g. from Opus to Lossless FLAC). */
   onUpgraded: (track: LoadedTrack) => void = () => {};
   private activeUpgradeToken = 0;
+  private currentBlobUrl: string | null = null;
+  private currentUpgradeAbort: AbortController | null = null;
 
   constructor(audio: HTMLAudioElement) {
     this.audio = audio;
@@ -182,6 +184,12 @@ export class YouTubeEngine {
   ): Promise<LoadedTrack> {
     const generation = ++this.generation;
     this.loading = true;
+    this.currentUpgradeAbort?.abort();
+    this.currentUpgradeAbort = null;
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = null;
+    }
     const started = performance.now();
     trackLog.i(`loading at ${startSec.toFixed(1)}s`, videoId);
 
@@ -470,6 +478,9 @@ export class YouTubeEngine {
     generation: number,
     upgradeToken: number,
   ): void {
+    const abortController = new AbortController();
+    this.currentUpgradeAbort = abortController;
+
     void (async () => {
       try {
         const { resolveLosslessTrack } = await import('@/playback/addon/addonResolver');
@@ -477,6 +488,7 @@ export class YouTubeEngine {
 
         // Ensure this generation, current track, and upgrade token are still valid
         if (
+          abortController.signal.aborted ||
           generation !== this.generation ||
           upgradeToken !== this.activeUpgradeToken ||
           !this.current ||
@@ -486,15 +498,51 @@ export class YouTubeEngine {
         }
 
         if (lossless?.url) {
-          await this.hotSwapToLossless(lossless, title, artist, durationSec, generation, upgradeToken);
+          trackLog.i(`Found Lossless FLAC stream. Fully buffering audio before hot-swap...`, videoId);
+
+          // Fully load the lossless song in the background while Opus continues playing uninterrupted
+          const response = await fetch(lossless.url, {
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Lossless download failed with HTTP ${response.status}`);
+          }
+
+          const blob = await response.blob();
+
+          if (
+            abortController.signal.aborted ||
+            generation !== this.generation ||
+            upgradeToken !== this.activeUpgradeToken ||
+            !this.current ||
+            this.current.videoId !== videoId
+          ) {
+            return;
+          }
+
+          const blobUrl = URL.createObjectURL(blob);
+          if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+          }
+          this.currentBlobUrl = blobUrl;
+
+          // Perform instantaneous, zero-delay hot-swap only now that the entire lossless song is in local memory
+          await this.hotSwapToLossless(blobUrl, lossless, title, artist, durationSec, generation, upgradeToken);
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        if (abortController.signal.aborted) return;
         trackLog.w(`Background lossless upgrade skipped: ${String(err)}`, videoId);
+      } finally {
+        if (this.currentUpgradeAbort === abortController) {
+          this.currentUpgradeAbort = null;
+        }
       }
     })();
   }
 
   private async hotSwapToLossless(
+    streamUrl: string,
     lossless: ResolvedLosslessTrack,
     origTitle: string,
     origArtist: string,
@@ -511,7 +559,7 @@ export class YouTubeEngine {
     }
 
     const videoId = this.current.videoId;
-    trackLog.i(`Seamlessly upgrading to Lossless FLAC stream from ${lossless.sourceName}`, videoId);
+    trackLog.i(`Lossless audio 100% loaded. Executing seamless 0ms hot-swap from ${lossless.sourceName}`, videoId);
 
     // 1. Capture exact position & playback state
     const currentTime = this.audio.currentTime;
@@ -530,28 +578,27 @@ export class YouTubeEngine {
     this.direct = null;
     this.current = { videoId, client: 'WEB' as PlayerClientName, signed: false };
 
-    // 3. Connect direct FLAC stream
+    // 3. Connect the fully loaded local FLAC blob stream
     this.audio.crossOrigin = 'anonymous';
-    this.audio.src = lossless.url;
+    this.audio.src = streamUrl;
 
-    // 4. Restore exact timestamp
+    // 4. Restore exact timestamp instantaneously
     if (currentTime > 0) {
       const targetTime = currentTime;
       const restoreTime = () => {
         try {
-          if (Math.abs(this.audio.currentTime - targetTime) > 0.5) {
+          if (Math.abs(this.audio.currentTime - targetTime) > 0.3) {
             this.audio.currentTime = targetTime;
           }
         } catch {}
       };
       this.audio.addEventListener('loadedmetadata', restoreTime, { once: true });
-      this.audio.addEventListener('canplay', restoreTime, { once: true });
       try {
         this.audio.currentTime = targetTime;
       } catch {}
     }
 
-    // 5. Resume playback seamlessly if it was playing
+    // 5. Resume playback seamlessly
     if (isPlaying) {
       this.audio.play().catch(() => {
         const resumeOnReady = () => {
@@ -783,6 +830,12 @@ export class YouTubeEngine {
 
   async stop(): Promise<void> {
     this.generation++;
+    this.currentUpgradeAbort?.abort();
+    this.currentUpgradeAbort = null;
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = null;
+    }
     this.current = null;
     this.direct = null;
     this.audio.pause();
