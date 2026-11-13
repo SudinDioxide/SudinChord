@@ -13,6 +13,15 @@ export interface ResolvedLosslessTrack {
   sourceName: string;
 }
 
+interface PersistentCacheEntry {
+  track: ResolvedLosslessTrack;
+  savedAt: number;
+}
+
+const CACHE_STORAGE_KEY = 'sudinchord_lossless_cache_v1';
+const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+const MAX_CACHE_ENTRIES = 500;
+
 function cleanTitle(rawTitle: string): string {
   return rawTitle
     .replace(/[\(\[](?:official\s*(?:music\s*)?video|video|audio|lyrics?|hd|4k|remastered?|visualizer|explicit)[\)\]]/gi, '')
@@ -35,11 +44,61 @@ function cleanArtist(rawArtist: string): string {
   return rawArtist.replace(/\s*-\s*topic$/i, '').trim();
 }
 
-// Cache for resolved lossless tracks so repeated queries or cached tracks load instantly (0ms)
+// Memory cache for fast lookups (0ms)
 const resolvedCache = new Map<string, ResolvedLosslessTrack>();
+// Deduplication map for queries in flight
+const inFlightResolutions = new Map<string, Promise<ResolvedLosslessTrack | null>>();
 
 function getCacheKey(title: string, artist: string): string {
   return `${cleanTitle(title).toLowerCase()}:::${cleanArtist(artist).toLowerCase()}`;
+}
+
+// Initialize persistent cache from localStorage
+function initPersistentCache() {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const raw = window.localStorage.getItem(CACHE_STORAGE_KEY);
+    if (!raw) return;
+    const data: Record<string, PersistentCacheEntry> = JSON.parse(raw);
+    const now = Date.now();
+    let hasExpired = false;
+    for (const [key, entry] of Object.entries(data)) {
+      if (entry && entry.track && now - entry.savedAt < CACHE_TTL_MS) {
+        resolvedCache.set(key, entry.track);
+      } else {
+        hasExpired = true;
+      }
+    }
+    if (hasExpired) {
+      const valid = Object.fromEntries(
+        Object.entries(data).filter(([_, e]) => e && e.track && now - e.savedAt < CACHE_TTL_MS)
+      );
+      window.localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(valid));
+    }
+  } catch {
+    // Ignore JSON parse or storage errors
+  }
+}
+initPersistentCache();
+
+function saveToPersistentCache(key: string, track: ResolvedLosslessTrack) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const raw = window.localStorage.getItem(CACHE_STORAGE_KEY);
+    const data: Record<string, PersistentCacheEntry> = raw ? JSON.parse(raw) : {};
+    data[key] = { track, savedAt: Date.now() };
+
+    const entries = Object.entries(data);
+    if (entries.length > MAX_CACHE_ENTRIES) {
+      entries.sort((a, b) => b[1].savedAt - a[1].savedAt);
+      const trimmed = Object.fromEntries(entries.slice(0, MAX_CACHE_ENTRIES));
+      window.localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(trimmed));
+    } else {
+      window.localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch {
+    // Ignore storage quota exceeded
+  }
 }
 
 export function getCachedLosslessTrack({
@@ -70,42 +129,57 @@ async function querySingleAddon(
     const strippedTitle = stripPackaging(sTitle);
     const pArtist = primaryArtist(sArtist);
 
-    // Multi-tier query strategies:
-    // 1. Core title + primary artist (highest hit rate on streaming backends)
-    // 2. Full title + primary artist
-    // 3. Core title only
-    // 4. Full title
-    const searchQueries = [
+    // Group queries into high-confidence artist queries and fallback queries
+    const artistQueries = [
       ...new Set([
         pArtist ? `${strippedTitle} ${pArtist}` : strippedTitle,
         pArtist && sTitle !== strippedTitle ? `${sTitle} ${pArtist}` : '',
-        strippedTitle,
-        sTitle !== strippedTitle ? sTitle : '',
       ].filter(Boolean)),
     ];
 
-    let candidates: AddonTrack[] = [];
+    const fallbackQueries = [
+      ...new Set([
+        strippedTitle,
+        sTitle !== strippedTitle ? sTitle : '',
+      ].filter((q) => Boolean(q) && !artistQueries.includes(q))),
+    ];
+
     const queryTimeout = Math.min(timeoutMs, 4000);
-    for (const q of searchQueries) {
-      const searchUrl = `${baseUrl}/search?q=${encodeURIComponent(q)}`;
+
+    const searchEndpoint = async (query: string): Promise<AddonTrack[]> => {
+      const searchUrl = `${baseUrl}/search?q=${encodeURIComponent(query)}`;
+      const res = await fetch(searchUrl, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
+        },
+        signal: AbortSignal.timeout(queryTimeout),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { tracks?: AddonTrack[] };
+      if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
+        return data.tracks;
+      }
+      throw new Error('No tracks found');
+    };
+
+    let candidates: AddonTrack[] = [];
+
+    // Parallel racing: Search top artist-targeted queries simultaneously
+    if (artistQueries.length > 0) {
       try {
-        const res = await fetch(searchUrl, {
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
-          },
-          signal: AbortSignal.timeout(queryTimeout),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { tracks?: AddonTrack[] };
-          if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
-            candidates = data.tracks;
-            break;
-          }
-        }
+        candidates = await Promise.any(artistQueries.map((q) => searchEndpoint(q)));
       } catch {
-        // Individual query timed out or errored
-        continue;
+        // artistQueries failed
+      }
+    }
+
+    // If no candidates from artist queries, try fallback queries in parallel
+    if (candidates.length === 0 && fallbackQueries.length > 0) {
+      try {
+        candidates = await Promise.any(fallbackQueries.map((q) => searchEndpoint(q)));
+      } catch {
+        // fallbackQueries failed
       }
     }
 
@@ -185,8 +259,9 @@ async function querySingleAddon(
       sourceName,
     };
 
-    // Cache the verified match
-    resolvedCache.set(getCacheKey(sTitle, sArtist), result);
+    const cacheKey = getCacheKey(sTitle, sArtist);
+    resolvedCache.set(cacheKey, result);
+    saveToPersistentCache(cacheKey, result);
     return result;
   } catch {
     return null;
@@ -211,48 +286,60 @@ export async function resolveLosslessTrack({
   const sArtist = cleanArtist(artist || '');
   if (!sTitle) return null;
 
-  // Return cached result immediately if available
+  const cacheKey = getCacheKey(sTitle, sArtist);
+
+  // Return cached result immediately if available (0ms)
   const cached = getCachedLosslessTrack({ title: sTitle, artist: sArtist });
   if (cached) return cached;
+
+  // In-flight deduplication: return existing promise if already resolving
+  const pending = inFlightResolutions.get(cacheKey);
+  if (pending) return pending;
 
   // Only query active, enabled addons that are connected and healthy
   const activeAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
   if (activeAddons.length === 0) return null;
 
-  // Parallel resolution: query all active addons simultaneously,
-  // bounded by the specified timeout cap so playback upgrade runs smoothly.
-  try {
-    const queryPromises = activeAddons.map((addon) =>
-      querySingleAddon(addon, sTitle, sArtist, durationSec, timeoutMs)
-    );
+  const resolutionPromise = (async () => {
+    try {
+      const queryPromises = activeAddons.map((addon) =>
+        querySingleAddon(addon, sTitle, sArtist, durationSec, timeoutMs)
+      );
 
-    const matchPromise = new Promise<ResolvedLosslessTrack | null>((resolve) => {
-      let pending = queryPromises.length;
-      for (const p of queryPromises) {
-        p.then((track) => {
-          if (track) {
-            resolve(track);
-          } else {
-            pending--;
-            if (pending === 0) resolve(null);
-          }
-        }).catch(() => {
-          pending--;
-          if (pending === 0) resolve(null);
-        });
+      const matchPromise = new Promise<ResolvedLosslessTrack | null>((resolve) => {
+        let remaining = queryPromises.length;
+        for (const p of queryPromises) {
+          p.then((track) => {
+            if (track) {
+              resolve(track);
+            } else {
+              remaining--;
+              if (remaining === 0) resolve(null);
+            }
+          }).catch(() => {
+            remaining--;
+            if (remaining === 0) resolve(null);
+          });
+        }
+      });
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), timeoutMs)
+      );
+
+      const resolved = await Promise.race([matchPromise, timeoutPromise]);
+      if (resolved) {
+        resolvedCache.set(cacheKey, resolved);
+        saveToPersistentCache(cacheKey, resolved);
       }
-    });
-
-    const timeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), timeoutMs)
-    );
-
-    const resolved = await Promise.race([matchPromise, timeoutPromise]);
-    if (resolved) {
-      resolvedCache.set(getCacheKey(sTitle, sArtist), resolved);
+      return resolved;
+    } catch {
+      return null;
+    } finally {
+      inFlightResolutions.delete(cacheKey);
     }
-    return resolved;
-  } catch {
-    return null;
-  }
+  })();
+
+  inFlightResolutions.set(cacheKey, resolutionPromise);
+  return resolutionPromise;
 }

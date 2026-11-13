@@ -21,6 +21,7 @@ import {
   type QueueSource,
 } from '@/playback/queue/timeline';
 import { trackLog } from '@/playback/trackLog';
+import { resolveLosslessTrack } from '@/playback/addon/addonResolver';
 import type { LoadedTrack, StreamStats, YouTubeEngine } from '@/playback/youtube/engine';
 import type { AutomixGraph, AutoDJSnapshot } from '@/playback/automix';
 
@@ -557,6 +558,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   playNext(tracks, source = null) {
     insertUser(tracks, source, true);
+    prefetchNextTrackLossless();
     intent();
   },
 
@@ -865,6 +867,26 @@ async function advance(auto: boolean): Promise<void> {
   await startAt(plan.index, { auto });
 }
 
+function prefetchNextTrackLossless() {
+  try {
+    const { queue, index } = usePlayer.getState();
+    const nextEntry = queue[index + 1];
+    if (!nextEntry?.track) return;
+    const t = nextEntry.track;
+    const title = t.title;
+    const artist = t.artists?.map((a) => a.name).join(', ') ?? '';
+    if (!title) return;
+    void resolveLosslessTrack({
+      title,
+      artist,
+      durationSec: t.durationSec ?? undefined,
+      timeoutMs: 8000,
+    });
+  } catch {
+    // Non-critical background prefetch
+  }
+}
+
 /** Once a track is under way: prune hand-queued tracks already played, and top up AutoPlay. */
 function afterTrackStarted() {
   const { queue, index } = usePlayer.getState();
@@ -875,7 +897,10 @@ function afterTrackStarted() {
       index: index - [...played].filter((i) => i < index).length,
     });
   }
-  void refillAutoplay();
+  void refillAutoplay().then(() => {
+    prefetchNextTrackLossless();
+  });
+  prefetchNextTrackLossless();
 }
 
 // ---- AutoPlay ---------------------------------------------------------------------
