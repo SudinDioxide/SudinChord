@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { getPlayhead, usePlayer, type NowPlaying } from '@/state/player';
+import { getAudio, getPlayhead, usePlayer, type NowPlaying } from '@/state/player';
 import { useVideo } from '@/state/video';
 import { lookupLyrics } from '@/lyrics/repository';
 import { romajiOf } from '@/data/match/trackMatcher';
@@ -293,12 +293,16 @@ export function useMediaSession(): void {
         const playhead = getPlayhead();
         const videoState = useVideo.getState();
         const hasVideo = !!nowPlaying?.videoId && videoState.videoId === nowPlaying.videoId;
+        const audio = getAudio();
+        const durationSec = (audio && Number.isFinite(audio.duration) && audio.duration > 0)
+          ? audio.duration
+          : (nowPlaying?.durationSec || 0);
 
         ep.sendMediaState({
           title: nowPlaying?.title || '',
           artist: nowPlaying?.artist || '',
           artworkUrl: nowPlaying?.artworkUrl || null,
-          durationSec: nowPlaying?.durationSec || 0,
+          durationSec,
           positionSec: playhead?.sec ?? 0,
           status,
           playing: isPlaying,
@@ -322,12 +326,16 @@ export function useMediaSession(): void {
         const playhead = getPlayhead();
         const videoState = useVideo.getState();
         const hasVideo = !!p.nowPlaying.videoId && videoState.videoId === p.nowPlaying.videoId;
+        const audio = getAudio();
+        const durationSec = (audio && Number.isFinite(audio.duration) && audio.duration > 0)
+          ? audio.duration
+          : (p.nowPlaying.durationSec || 0);
 
         ep.sendMediaState({
           title: p.nowPlaying.title || '',
           artist: p.nowPlaying.artist || '',
           artworkUrl: p.nowPlaying.artworkUrl || null,
-          durationSec: p.nowPlaying.durationSec || 0,
+          durationSec,
           positionSec: playhead?.sec ?? 0,
           status: p.status,
           playing: true,
