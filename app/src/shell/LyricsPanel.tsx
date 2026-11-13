@@ -5,16 +5,49 @@ import '@uimaxbai/am-lyrics/am-lyrics.js';
 // Breaking combining vowel signs (like Tamil ா, ே) into separate <span> elements causes the font renderer to show dotted circles (◌).
 if (typeof customElements !== 'undefined') {
   const AmLyricsClass = customElements.get('am-lyrics') as any;
-  if (AmLyricsClass && typeof AmLyricsClass.characterMotionMode === 'function') {
-    const originalMode = AmLyricsClass.characterMotionMode;
-    AmLyricsClass.characterMotionMode = function (text: string, durationMs: number, background = false) {
-      if (
-        /[\u0900-\u0d7f\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u1780-\u17ff]/.test(text) ||
-        /\p{M}/u.test(text)
-      ) {
-        return 'none';
+  if (AmLyricsClass) {
+    if (typeof AmLyricsClass.characterMotionMode === 'function') {
+      const originalMode = AmLyricsClass.characterMotionMode;
+      AmLyricsClass.characterMotionMode = function (text: string, durationMs: number, background = false) {
+        if (
+          /[\u0900-\u0d7f\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u1780-\u17ff]/.test(text) ||
+          /\p{M}/u.test(text)
+        ) {
+          return 'none';
+        }
+        return originalMode.call(this, text, durationMs, background);
+      };
+    }
+
+    // Ensure line cache never flags Indic / combining words for character-level motion
+    const origEnsure = AmLyricsClass.prototype._ensureLineDataCache;
+    AmLyricsClass.prototype._ensureLineDataCache = function () {
+      origEnsure?.call(this);
+      if (Array.isArray(this.cachedLineData)) {
+        for (const line of this.cachedLineData) {
+          if (!line?.wordGroups) continue;
+          line.wordGroups.forEach((group: any[], idx: number) => {
+            const txt = group.map((s: any) => s.text || '').join('');
+            if (
+              /[\u0900-\u0d7f\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u1780-\u17ff]/.test(txt) ||
+              /\p{M}/u.test(txt)
+            ) {
+              if (line.groupGrowable) line.groupGrowable[idx] = false;
+              if (line.groupCharRise) line.groupCharRise[idx] = false;
+              if (line.groupCharDrag) line.groupCharDrag[idx] = false;
+            }
+          });
+        }
       }
-      return originalMode.call(this, text, durationMs, background);
+    };
+
+    // Prevent am-lyrics internal auto translation and auto romanization from setting isLoading = true
+    // or triggering redundant network requests that stall the UI with skeleton loading bars
+    AmLyricsClass.prototype.applyTranslation = async function () {
+      this.isLoading = false;
+    };
+    AmLyricsClass.prototype.applyRomanization = async function () {
+      this.isLoading = false;
     };
   }
 }
@@ -146,7 +179,9 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   // and finished after ours, wiping it.
   useEffect(() => {
     const el = document.createElement('am-lyrics') as AmLyricsElement;
+    el.setAttribute('no-auto-alternates', '');
     el.noAutoAlternates = true;
+    (el as any).isLoading = false;
     el.ttml = ttml;
     el.interpolate = true;
     el.autoScroll = true;
@@ -193,7 +228,9 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
 
   useEffect(() => {
     if (element.current && element.current.ttml !== ttml) {
+      element.current.setAttribute('no-auto-alternates', '');
       element.current.noAutoAlternates = true;
+      (element.current as any).isLoading = false;
       element.current.ttml = ttml;
       element.current.showTranslation = true;
       element.current.showRomanization = true;
