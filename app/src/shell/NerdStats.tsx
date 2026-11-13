@@ -4,6 +4,7 @@ import type { AutoDJSnapshot } from '@/playback/automix';
 import type { analyzer as Analyzer } from '@/playback/automix/analysis/analyzer';
 import type { NowPlaying } from '@/state/player';
 import { usePlayer } from '@/state/player';
+import { cleanSourceName } from '@/playback/addon/addonResolver';
 
 /**
  * Stats for nerds, under the artist in the full-screen player (the phone's
@@ -34,7 +35,7 @@ function describeStream(np: NowPlaying): string | null {
     s.bitrateKbps ? `${s.bitrateKbps} kbps` : null,
     s.channels ? ({ 1: 'Mono', 2: 'Stereo' } as Record<number, string>)[s.channels] ?? `${s.channels} channels` : null,
     s.itag ? `itag ${s.itag}` : null,
-    s.source ? `via ${s.source}` : s.client ? `${s.client} ${s.mode}` : null,
+    s.source ? `via ${cleanSourceName(s.source)}` : s.client ? `${s.client} ${s.mode}` : null,
   ];
   return parts.filter(Boolean).join(' • ');
 }

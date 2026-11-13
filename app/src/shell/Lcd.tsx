@@ -17,6 +17,7 @@ import { useHasVideo } from '@/state/video';
 import { albumPageFor, artistPageFor } from './nowPlayingLinks';
 import { MixWindowHighlight } from './NerdStats';
 import { useScrubber } from './useScrubber';
+import { cleanSourceName } from '@/playback/addon/addonResolver';
 
 // The title and each artist: plain until hovered, then underlined on their own.
 export const pageLink = 'cursor-pointer text-start hover:underline focus-visible:underline aria-busy:cursor-progress';
@@ -165,14 +166,16 @@ export function Lcd() {
             {track?.explicit && <ExplicitBadge size={11} />}
             {nowPlaying?.stream?.codec === 'FLAC' && (
               <span
-                className="ml-2 inline-flex items-center gap-1 text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase select-none"
+                className="ml-2 inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase select-none"
                 title={nowPlaying.streamInfo ?? 'Lossless Audio'}
               >
                 <span>Lossless</span>
                 {nowPlaying.stream.source && (
                   <>
                     <span className="opacity-40">·</span>
-                    <span className="text-emerald-200 normal-case font-semibold">{nowPlaying.stream.source}</span>
+                    <span className="text-emerald-200 normal-case font-semibold max-w-[85px] truncate">
+                      {cleanSourceName(nowPlaying.stream.source)}
+                    </span>
                   </>
                 )}
               </span>

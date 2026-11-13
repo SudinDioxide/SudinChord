@@ -115,6 +115,17 @@ export function getCachedLosslessTrack({
   return resolvedCache.get(key) || null;
 }
 
+export function cleanSourceName(rawName: string): string {
+  if (!rawName) return 'Lossless';
+  return (
+    rawName
+      .replace(/\[\s*\d+[hmds\s]+\]/gi, '')
+      .replace(/\s*addon\b/gi, '')
+      .replace(/\s*\[.*?\]/gi, '')
+      .trim() || 'Lossless'
+  );
+}
+
 async function querySingleAddon(
   addon: InstalledAddon,
   sTitle: string,
@@ -123,7 +134,7 @@ async function querySingleAddon(
   timeoutMs = 4000,
 ): Promise<ResolvedLosslessTrack | null> {
   const baseUrl = addon.url;
-  const sourceName = addon.name || 'Lossless Addon';
+  const sourceName = cleanSourceName(addon.name);
 
   try {
     const strippedTitle = stripPackaging(sTitle);
