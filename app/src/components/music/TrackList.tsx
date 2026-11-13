@@ -41,8 +41,8 @@ const cell = 'flex h-full min-w-0 items-center';
 // 396 / 274 / 274 / 141 at 1440px (report §14).
 const playlistColumns = 'grid-cols-[minmax(0,36.5fr)_minmax(0,25.25fr)_minmax(0,25.25fr)_minmax(0,13fr)]';
 // Artist and album: playlists only, and not below 768px.
-const secondary = `${cell} pe-2.5 max-md:hidden`;
-const tertiary = `${cell} pe-4 max-md:hidden`;
+const secondary = `${cell} ps-4 pe-2.5 max-md:hidden`;
+const tertiary = `${cell} ps-4 pe-4 max-md:hidden`;
 // A row from another catalogue with no YouTube Music song (yet) is dimmed.
 const dimmed = 'group-data-unavailable/row:opacity-45';
 const link = 'text-inherit hover:underline group-data-current/row:text-primary';

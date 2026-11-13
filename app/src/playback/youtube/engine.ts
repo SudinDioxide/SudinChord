@@ -17,6 +17,7 @@ import {
   type ResolvedPlayer,
 } from './resolver';
 import { ShakaPlayerAdapter } from './ShakaPlayerAdapter';
+import type { ResolvedLosslessTrack } from '@/playback/addon/addonResolver';
 
 /** What the engine knows about the track it loaded. */
 export interface LoadedTrack {
@@ -98,6 +99,9 @@ export class YouTubeEngine {
   onFatal: (videoId: string, message: string, permanent: boolean) => void = () => {};
   /** Raised when the engine moved a track to another client mid-playback. */
   onRecovered: (track: LoadedTrack) => void = () => {};
+  /** Raised when the engine upgraded the track mid-playback (e.g. from Opus to Lossless FLAC). */
+  onUpgraded: (track: LoadedTrack) => void = () => {};
+  private activeUpgradeToken = 0;
 
   constructor(audio: HTMLAudioElement) {
     this.audio = audio;
@@ -286,13 +290,15 @@ export class YouTubeEngine {
       }
     }
 
-    // Support playing Lossless Audio from user-configured Addon
+    const upgradeToken = ++this.activeUpgradeToken;
+
+    // Fast check: if a verified Lossless stream is already cached, play it immediately
     if (!videoId.startsWith('local:') && (title || artist)) {
       try {
-        const { resolveLosslessTrack } = await import('@/playback/addon/addonResolver');
-        const lossless = await resolveLosslessTrack({ title, artist, durationSec });
+        const { getCachedLosslessTrack } = await import('@/playback/addon/addonResolver');
+        const lossless = getCachedLosslessTrack({ title, artist, durationSec });
         if (lossless?.url) {
-          trackLog.i(`Playing Lossless stream from ${lossless.sourceName}`, videoId);
+          trackLog.i(`Playing cached Lossless stream from ${lossless.sourceName}`, videoId);
           if (this.player) {
             try {
               await this.player.unload();
@@ -336,7 +342,7 @@ export class YouTubeEngine {
           };
         }
       } catch (err) {
-        trackLog.w(`Addon lossless check skipped: ${String(err)}`, videoId);
+        trackLog.w(`Addon cached check skipped: ${String(err)}`, videoId);
       }
     }
 
@@ -371,6 +377,10 @@ export class YouTubeEngine {
             `playing via ${track.client}, ${track.format}, first audio after ${Math.round(performance.now() - started)}ms`,
             videoId,
           );
+          // If streaming standard YouTube Opus/AAC, trigger background lossless lookup & auto-upgrade
+          if (!videoId.startsWith('local:') && (title || artist)) {
+            this.triggerBackgroundLosslessUpgrade(videoId, title, artist, durationSec, generation, upgradeToken);
+          }
           return track;
         } catch (error) {
           if (error instanceof SupersededError) throw error;
@@ -450,6 +460,130 @@ export class YouTubeEngine {
       stream: { ...selected.stats, mode },
       loudnessDb: info.player_config?.audio_config?.loudness_db ?? null,
     };
+  }
+
+  private triggerBackgroundLosslessUpgrade(
+    videoId: string,
+    title: string,
+    artist: string,
+    durationSec: number,
+    generation: number,
+    upgradeToken: number,
+  ): void {
+    void (async () => {
+      try {
+        const { resolveLosslessTrack } = await import('@/playback/addon/addonResolver');
+        const lossless = await resolveLosslessTrack({ title, artist, durationSec, timeoutMs: 8000 });
+
+        // Ensure this generation, current track, and upgrade token are still valid
+        if (
+          generation !== this.generation ||
+          upgradeToken !== this.activeUpgradeToken ||
+          !this.current ||
+          this.current.videoId !== videoId
+        ) {
+          return;
+        }
+
+        if (lossless?.url) {
+          await this.hotSwapToLossless(lossless, title, artist, durationSec, generation, upgradeToken);
+        }
+      } catch (err) {
+        trackLog.w(`Background lossless upgrade skipped: ${String(err)}`, videoId);
+      }
+    })();
+  }
+
+  private async hotSwapToLossless(
+    lossless: ResolvedLosslessTrack,
+    origTitle: string,
+    origArtist: string,
+    origDurationSec: number,
+    generation: number,
+    upgradeToken: number,
+  ): Promise<void> {
+    if (
+      generation !== this.generation ||
+      upgradeToken !== this.activeUpgradeToken ||
+      !this.current
+    ) {
+      return;
+    }
+
+    const videoId = this.current.videoId;
+    trackLog.i(`Seamlessly upgrading to Lossless FLAC stream from ${lossless.sourceName}`, videoId);
+
+    // 1. Capture exact position & playback state
+    const currentTime = this.audio.currentTime;
+    const isPlaying = !this.audio.paused && !this.audio.ended;
+
+    // 2. Safely unload Shaka Player without destroying the HTMLAudioElement
+    if (this.player) {
+      try {
+        await this.player.unload();
+        await this.player.detach();
+      } catch {}
+      this.player = null;
+    }
+    this.adapter?.dispose();
+    this.adapter = null;
+    this.direct = null;
+    this.current = { videoId, client: 'WEB' as PlayerClientName, signed: false };
+
+    // 3. Connect direct FLAC stream
+    this.audio.crossOrigin = 'anonymous';
+    this.audio.src = lossless.url;
+
+    // 4. Restore exact timestamp
+    if (currentTime > 0) {
+      const targetTime = currentTime;
+      const restoreTime = () => {
+        try {
+          if (Math.abs(this.audio.currentTime - targetTime) > 0.5) {
+            this.audio.currentTime = targetTime;
+          }
+        } catch {}
+      };
+      this.audio.addEventListener('loadedmetadata', restoreTime, { once: true });
+      this.audio.addEventListener('canplay', restoreTime, { once: true });
+      try {
+        this.audio.currentTime = targetTime;
+      } catch {}
+    }
+
+    // 5. Resume playback seamlessly if it was playing
+    if (isPlaying) {
+      this.audio.play().catch(() => {
+        const resumeOnReady = () => {
+          this.audio.play().catch(() => {});
+        };
+        this.audio.addEventListener('canplay', resumeOnReady, { once: true });
+        this.audio.addEventListener('loadeddata', resumeOnReady, { once: true });
+      });
+    }
+
+    // 6. Build the upgraded LoadedTrack metadata
+    const upgradedTrack: LoadedTrack = {
+      videoId,
+      title: origTitle || lossless.title,
+      author: origArtist || lossless.artist,
+      durationSec: lossless.durationSec || origDurationSec || Math.round(this.audio.duration || 0),
+      thumbnails: [],
+      client: 'WEB' as PlayerClientName,
+      format: lossless.format,
+      stream: {
+        codec: lossless.codec,
+        itag: null,
+        bitrateKbps: lossless.bitrateKbps,
+        sampleRateHz: lossless.sampleRateHz,
+        channels: 2,
+        mode: 'direct',
+      },
+      loudnessDb: null,
+    };
+
+    // 7. Fire upgrade callback to update UI streamInfo, format badges, and player state
+    this.onUpgraded(upgradedTrack);
   }
 
   /**

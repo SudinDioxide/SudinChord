@@ -267,6 +267,13 @@ function getDecks(): Promise<Deck[]> {
         const entry = queue[index];
         applyTrack(track, entry?.track.videoId === track.videoId ? entry.track : undefined);
       };
+      engine.onUpgraded = (track) => {
+        if (decks?.[active] !== deck) return;
+        const { queue, index, nowPlaying } = usePlayer.getState();
+        if (nowPlaying?.videoId !== track.videoId) return;
+        const entry = queue[index];
+        applyTrack(track, entry?.track.videoId === track.videoId ? entry.track : undefined);
+      };
       bindElement(deck, n);
       return deck;
     });
