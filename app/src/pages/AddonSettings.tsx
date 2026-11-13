@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Link, Plus, Trash2, Disc3, Radio, Server } from 'lucide-react';
+import { ChevronDown, ChevronUp, Link, Plus, Trash2 } from 'lucide-react';
 import { useAddons } from '@/data/addon/useAddon';
-import { getClashFlacConfig, setClashFlacConfig, type ClashEnginePriority } from '@/playback/addon/clashflacResolver';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
 
@@ -9,15 +8,9 @@ const EXAMPLE_ADDON_URL = 'https://stream.pencarimovie.com/66ff097863dedb7ccd840
 
 export function AddonSettings() {
   const { addons, losslessEnabled, addAddon, removeAddon, toggleAddon, moveAddon, setLosslessEnabled } = useAddons();
-  const [clashConfig, setClashState] = useState(getClashFlacConfig);
   const [inputUrl, setInputUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const updateClash = (patch: Partial<ReturnType<typeof getClashFlacConfig>>) => {
-    setClashFlacConfig(patch);
-    setClashState(getClashFlacConfig());
-  };
 
   const handleAdd = async (urlToAdd?: string) => {
     const target = urlToAdd !== undefined ? urlToAdd : inputUrl;
@@ -50,89 +43,6 @@ export function AddonSettings() {
           checked={losslessEnabled}
           onChange={setLosslessEnabled}
         />
-
-        {/* ClashFLAC Direct AAC & Opus Provider Card */}
-        <div className="flex flex-col gap-3 p-4 border-t border-white/5 bg-quaternary/15">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
-                <Disc3 size={18} />
-              </div>
-              <div className="flex flex-col">
-                <span className="type-body-emphasized text-primary flex items-center gap-2">
-                  ClashFLAC Audio Engine
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300">
-                    AAC & Opus Only
-                  </span>
-                </span>
-                <span className="type-callout text-secondary">
-                  Locked strictly to high-fidelity AAC (320kbps) & Opus audio streams. Non-AAC/Opus streams are filtered out.
-                </span>
-              </div>
-            </div>
-            <Toggle
-              label=""
-              detail=""
-              checked={clashConfig.enabled}
-              onChange={(val) => updateClash({ enabled: val })}
-            />
-          </div>
-
-          {clashConfig.enabled && (
-            <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
-              {/* Engine Priority */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span className="type-callout text-secondary flex items-center gap-1.5">
-                  <Radio size={14} className="text-key" /> Preferred Stream Engine:
-                </span>
-                <div className="inline-flex rounded-lg border border-white/10 bg-quaternary/40 p-0.5">
-                  {(['jiosaavn', 'tidal', 'qobuz'] as ClashEnginePriority[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => updateClash({ priority: p })}
-                      className={`px-3 py-1 rounded-md type-callout capitalize font-medium transition-all ${
-                        clashConfig.priority === p
-                          ? 'bg-key text-white shadow-sm'
-                          : 'text-secondary hover:text-primary'
-                      }`}
-                    >
-                      {p === 'jiosaavn' ? 'JioSaavn (320k AAC)' : p === 'tidal' ? 'Tidal (AAC)' : 'Qobuz'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* API Base URL */}
-              <div className="flex flex-col gap-1.5">
-                <span className="type-callout text-secondary flex items-center gap-1.5">
-                  <Server size={14} className="text-key" /> ClashFLAC Backend Endpoint:
-                </span>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    className="flex-1 rounded-[8px] border border-white/10 bg-quaternary px-3 py-1.5 type-body text-primary placeholder:text-tertiary focus:outline-none focus:border-key text-xs font-mono"
-                    placeholder="https://clashflac.kanjijewels.com"
-                    value={clashConfig.apiBase}
-                    onChange={(e) => updateClash({ apiBase: e.target.value })}
-                  />
-                  <div className="flex gap-1.5 flex-none">
-                    <button
-                      className="px-2.5 py-1 rounded-[6px] border border-white/10 bg-quaternary/60 hover:bg-quaternary text-xs text-secondary hover:text-primary"
-                      onClick={() => updateClash({ apiBase: 'https://clashflac.kanjijewels.com' })}
-                    >
-                      Default
-                    </button>
-                    <button
-                      className="px-2.5 py-1 rounded-[6px] border border-white/10 bg-quaternary/60 hover:bg-quaternary text-xs text-secondary hover:text-primary"
-                      onClick={() => updateClash({ apiBase: 'http://127.0.0.1:8000' })}
-                    >
-                      Local (8000)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Add Addon Input Card */}
         <div className="flex flex-col gap-3 p-4 border-t border-white/5 bg-quaternary/10">
