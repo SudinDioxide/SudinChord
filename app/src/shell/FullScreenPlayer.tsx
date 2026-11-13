@@ -320,7 +320,11 @@ export function FullScreenPlayer() {
   };
 
   useEffect(() => {
-    if (video && !picked.current) setPanel(null);
+    if (video && !picked.current) {
+      setPanel(null);
+    } else if (!video && !picked.current) {
+      setPanel('lyrics');
+    }
   }, [video]);
 
   const wake = () => {
@@ -460,7 +464,7 @@ export function FullScreenPlayer() {
       <div
         className={
           theater
-            ? `absolute inset-x-0 bottom-0 flex justify-center bg-[linear-gradient(to_top,rgb(0_0_0/0.72),rgb(0_0_0/0.35)_55%,transparent)] px-6 pt-32 pb-16 transition-opacity duration-300${hidden}`
+            ? `absolute inset-x-0 bottom-0 z-10 flex flex-col items-center justify-end bg-gradient-to-t from-black/85 via-black/45 to-transparent px-6 pt-28 pb-6 transition-opacity duration-300${hidden}`
             : 'relative flex h-full items-center justify-center px-[clamp(20px,5vw,80px)] py-16 max-md:flex-col max-md:px-6 max-md:pb-18 overflow-hidden'
         }
         data-lyrics={column || undefined}
@@ -468,7 +472,7 @@ export function FullScreenPlayer() {
         <section
           className={
             theater
-              ? 'flex w-[min(720px,100%)] min-w-0 flex-col'
+              ? 'flex w-[min(680px,calc(100%-140px))] min-w-0 flex-col'
               : `flex w-[var(--art)] min-w-0 flex-col flex-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform transform-gpu${column ? ' max-md:order-2 max-md:w-full' : ''}`
           }
           aria-label="Player"
@@ -536,10 +540,10 @@ export function FullScreenPlayer() {
 
           <Scrubber accent={accent} />
           <Transport />
-          <AudioVisualizer className="mt-4 w-full rounded-[10px]" height={44} barCount={40} />
+          {!theater && <AudioVisualizer className="mt-4 w-full rounded-[10px]" height={44} barCount={40} />}
         </section>
 
-        {mountedPanel && (
+        {!theater && mountedPanel && (
           <div
             className={`self-stretch flex flex-col min-h-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[max-width,opacity,transform,margin] transform-gpu ${
               column
