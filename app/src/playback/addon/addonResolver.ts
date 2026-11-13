@@ -41,7 +41,12 @@ async function querySingleAddon(
     let candidates: AddonTrack[] = [];
     for (const q of searchQueries) {
       const searchUrl = `${baseUrl}/search?q=${encodeURIComponent(q)}`;
-      const res = await fetch(searchUrl, { headers: { Accept: 'application/json' } });
+      const res = await fetch(searchUrl, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
+        },
+      });
       if (res.ok) {
         const data = (await res.json()) as { tracks?: AddonTrack[] };
         if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
@@ -113,7 +118,12 @@ async function querySingleAddon(
 
     if (!streamUrl) {
       const streamEndpoint = `${baseUrl}/stream/${encodeURIComponent(bestTrack.id)}`;
-      const streamRes = await fetch(streamEndpoint, { headers: { Accept: 'application/json' } });
+      const streamRes = await fetch(streamEndpoint, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
+        },
+      });
       if (!streamRes.ok) return null;
 
       const streamData = (await streamRes.json()) as AddonStreamResult;
@@ -155,14 +165,15 @@ export async function resolveLosslessTrack({
   const state = addonStore.getState();
   if (!state.losslessEnabled) return null;
 
-  const enabledAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
-  if (enabledAddons.length === 0) return null;
+  const connectedAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
+  const candidateAddons = connectedAddons.length > 0 ? connectedAddons : state.addons.filter((a) => a.enabled);
+  if (candidateAddons.length === 0) return null;
 
   const sTitle = cleanTitle(title || '');
   const sArtist = cleanArtist(artist || '');
   if (!sTitle) return null;
 
-  for (const addon of enabledAddons) {
+  for (const addon of candidateAddons) {
     const match = await querySingleAddon(addon, sTitle, sArtist, durationSec);
     if (match) return match;
   }

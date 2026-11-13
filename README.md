@@ -89,9 +89,13 @@ The output files will be created in `desktop/dist-electron/`:
 SudinChord supports connecting custom lossless streaming endpoints:
 1. Open **Settings** from the sidebar.
 2. Select **Lossless Addons** (or navigate to `/settings/addons`).
-3. Click **Add Addon** and paste your extension streaming link.
-   - *Example:* `https://stream.pencarimovie.com/66ff097863dedb7ccd8401d5ffe616f3/music`
-4. You can add multiple addons; SudinChord automatically routes playback through the highest quality active provider.
+3. You can install all community addons with one click using the **Install All** button, or add individual addons:
+   - **PencariMusic:** `https://stream.pencarimovie.com/66ff097863dedb7ccd8401d5ffe616f3/music` (Universal Lossless / Telegram)
+   - **prodpwh addon:** `https://addon.palv.org` (Dolby Atmos & 24-bit/192kHz Hi-Res FLAC Gateway)
+   - **Confih Hi-Res:** `https://bitchord.confih.tech` (Multi-source Lossless & Dolby Atmos)
+   - **Qobuz [Heisenberg]:** `https://heisenbergbackaaahh.de.deplexo.com/a/manifest.json` (Bit-perfect Qobuz Hi-Res)
+   - **juanjob hi res:** `https://bitchord-hires-addon.de.deplexo.com/` (Multi-source Qobuz/Tidal)
+4. You can reorder enabled addons by priority; SudinChord automatically routes playback through the highest quality active provider.
 
 ### 2. Playing Local Music
 1. Click **Local Files** in the sidebar.

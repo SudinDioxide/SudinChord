@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { addonStore, type MultiAddonState, type InstalledAddon } from './addonManager';
+import { addonStore, COMMUNITY_ADDONS, type MultiAddonState, type InstalledAddon, type CommunityAddonPreset } from './addonManager';
+
+export { COMMUNITY_ADDONS, type CommunityAddonPreset };
 
 export function useAddons(): MultiAddonState & {
   addAddon: (url: string) => Promise<{ ok: boolean; error?: string }>;
@@ -7,6 +9,7 @@ export function useAddons(): MultiAddonState & {
   toggleAddon: (id: string, enabled: boolean) => void;
   moveAddon: (index: number, direction: 'up' | 'down') => void;
   setLosslessEnabled: (enabled: boolean) => void;
+  installAllCommunityAddons: () => Promise<number>;
 } {
   const [state, setState] = useState<MultiAddonState>(addonStore.getState());
 
@@ -21,6 +24,7 @@ export function useAddons(): MultiAddonState & {
     toggleAddon: (id: string, enabled: boolean) => addonStore.toggleAddon(id, enabled),
     moveAddon: (index: number, direction: 'up' | 'down') => addonStore.moveAddon(index, direction),
     setLosslessEnabled: (enabled: boolean) => addonStore.setLosslessEnabled(enabled),
+    installAllCommunityAddons: () => addonStore.installAllCommunityAddons(),
   };
 }
 

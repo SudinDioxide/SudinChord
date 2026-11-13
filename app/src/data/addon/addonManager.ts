@@ -34,6 +34,54 @@ export interface AddonStreamResult {
   error?: string;
 }
 
+export interface CommunityAddonPreset {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  badge?: string;
+  author?: string;
+}
+
+export const COMMUNITY_ADDONS: CommunityAddonPreset[] = [
+  {
+    id: 'org.pencarimovie.music',
+    name: 'PencariMusic',
+    url: 'https://stream.pencarimovie.com/66ff097863dedb7ccd8401d5ffe616f3/music',
+    description: 'Universal music addon - stream Telegram music & audio files via PencariMovie Server',
+    badge: 'Universal Lossless',
+  },
+  {
+    id: 'bsm-palv',
+    name: 'prodpwh addon',
+    url: 'https://addon.palv.org',
+    description: 'High-fidelity BitChord streaming gateway (Dolby Atmos & 24-bit/192kHz Hi-Res FLAC)',
+    badge: 'Dolby Atmos / Hi-Res',
+    author: 'BitChord Addon',
+  },
+  {
+    id: 'app.bitchord.confih',
+    name: 'Confih Hi-Res',
+    url: 'https://bitchord.confih.tech',
+    description: 'Multi-source lossless audio & Dolby Atmos streaming (24-bit/192kHz FLAC)',
+    badge: 'Hi-Res 192kHz',
+  },
+  {
+    id: 'dev.bitperfect.qobuz.de.personal',
+    name: 'Qobuz [Heisenberg]',
+    url: 'https://heisenbergbackaaahh.de.deplexo.com/a/manifest.json',
+    description: 'Bit-perfect Qobuz Hi-Res lossless streaming provider',
+    badge: 'Qobuz Hi-Res',
+  },
+  {
+    id: 'dev.akira.bitchord-hires',
+    name: 'juanjob hi res',
+    url: 'https://bitchord-hires-addon.de.deplexo.com/',
+    description: 'Multi-source lossless addon: Qobuz hi-res, Tidal, Monochrome, Netease, Deezer, Internet Archive',
+    badge: 'Multi-Source Lossless',
+  },
+];
+
 export interface InstalledAddon {
   id: string;
   url: string;
@@ -80,10 +128,21 @@ class AddonStore {
           this.state.addons = parsed;
         }
       } else {
-        // Check for legacy single addon migration
+        // Pre-populate with default BitChord community addons
         const legacyUrl = localStorage.getItem(LEGACY_STORAGE_URL_KEY);
         if (legacyUrl) {
           void this.addAddon(legacyUrl);
+        } else {
+          this.state.addons = COMMUNITY_ADDONS.map((preset, index) => ({
+            id: preset.id,
+            url: preset.url.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, ''),
+            name: preset.name,
+            description: preset.description,
+            enabled: true,
+            status: 'connected',
+            errorMessage: null,
+            createdAt: Date.now() + index,
+          }));
         }
       }
 
@@ -196,9 +255,27 @@ class AddonStore {
     this.notify();
   }
 
+  async installAllCommunityAddons(): Promise<number> {
+    let count = 0;
+    for (const preset of COMMUNITY_ADDONS) {
+      const cleanUrl = preset.url.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, '');
+      if (!this.state.addons.some((a) => a.url.toLowerCase() === cleanUrl.toLowerCase())) {
+        const res = await this.addAddon(preset.url);
+        if (res.ok) count++;
+      }
+    }
+    return count;
+  }
+
   private async fetchManifest(baseUrl: string): Promise<AddonManifest> {
     const manifestUrl = `${baseUrl}/manifest.json`;
-    const res = await fetch(manifestUrl, { headers: { Accept: 'application/json' } });
+    const res = await fetch(manifestUrl, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) {
       throw new Error(`Addon server responded with status ${res.status}`);
     }
