@@ -830,6 +830,8 @@
       });
     }
 
+    let currentRemoteStream = null;
+
     ipcRenderer.on('pip:offer', async (_event, offer) => {
       if (peerConnection) {
         peerConnection.close();
@@ -845,6 +847,7 @@
       peerConnection.ontrack = (event) => {
         console.log('[MiniPlayer Receiver] Received video track:', event.track?.kind);
         if (event.streams && event.streams[0]) {
+          currentRemoteStream = event.streams[0];
           miniVideo.srcObject = event.streams[0];
           miniVideo.play().catch((err) => console.warn('miniVideo play error:', err));
         }
@@ -891,7 +894,8 @@
 
     // 2. Handle Video Mode switching
     function setVideoMode(hasVideo, aspect) {
-      if (isVideoMode === hasVideo && (!aspect || aspect === currentVideoAspect)) return;
+      const aspectChanged = aspect && aspect > 0.5 && Math.abs(aspect - currentVideoAspect) >= 0.01;
+      if (isVideoMode === hasVideo && !aspectChanged) return;
       isVideoMode = hasVideo;
       if (aspect && aspect > 0.5) {
         currentVideoAspect = aspect;
@@ -900,12 +904,15 @@
       if (hasVideo) {
         playerCard.classList.add('has-video');
         videoBadge.style.display = 'inline-flex';
+        if (currentRemoteStream && miniVideo.srcObject !== currentRemoteStream) {
+          miniVideo.srcObject = currentRemoteStream;
+          void miniVideo.play().catch(() => {});
+        }
         updateWindowSize(aspect);
         showControls();
       } else {
         playerCard.classList.remove('has-video', 'controls-hidden');
         videoBadge.style.display = 'none';
-        miniVideo.srcObject = null;
         updateWindowSize();
       }
     }

@@ -18,6 +18,11 @@ const { extractMetadata, extractArtwork, AUDIO_EXTS } = require('./localMetadata
 
 app.name = 'SudinChord';
 
+// Ensure smooth, uninterrupted 60fps media capture when main window is minimized to Mini-Player / PiP
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+
 // Persistent metadata cache for instant folder scans
 const metadataCache = new Map();
 let metadataCacheLoaded = false;

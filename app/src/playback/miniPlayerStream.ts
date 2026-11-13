@@ -15,8 +15,9 @@ function getElectron(): ElectronPlatform | undefined {
 
 let miniPlayerOpen = false;
 let activePeerConnection: RTCPeerConnection | null = null;
-let activeStreamTrackId: string | null = null;
 let surfaceClaimedByMini = false;
+let capturedStream: MediaStream | null = null;
+let isNegotiating = false;
 
 function ensureSurfaceAvailable(needed: boolean) {
   if (needed && !surfaceClaimedByMini) {
@@ -33,7 +34,25 @@ function stopWebRTC() {
     activePeerConnection.close();
     activePeerConnection = null;
   }
-  activeStreamTrackId = null;
+}
+
+function getMediaStream(): MediaStream | null {
+  const video = getVideoElement();
+  if (!video) return null;
+  const existingTrack = capturedStream?.getVideoTracks()[0];
+  if (capturedStream && existingTrack && existingTrack.readyState === 'live') {
+    return capturedStream;
+  }
+  const captureFn = video as unknown as {
+    captureStream?: (fps?: number) => MediaStream;
+    mozCaptureStream?: (fps?: number) => MediaStream;
+  };
+  capturedStream = captureFn.captureStream
+    ? captureFn.captureStream(30)
+    : captureFn.mozCaptureStream
+      ? captureFn.mozCaptureStream(30)
+      : null;
+  return capturedStream;
 }
 
 async function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 600): Promise<void> {
@@ -59,66 +78,63 @@ async function startWebRTC() {
   const ep = getElectron();
   if (!ep?.sendPipOffer) return;
 
-  const video = getVideoElement();
-  if (!video) return;
-
-  // Ensure video has loaded data before capturing stream
-  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    await new Promise<void>((resolve) => {
-      video.addEventListener('loadeddata', () => resolve(), { once: true });
-      setTimeout(resolve, 1500);
-    });
-  }
-
-  // If audio is playing but video element is paused, ensure it's playing
-  const player = usePlayer.getState();
-  if (player.status === 'playing' && video.paused) {
-    void video.play().catch(() => {});
-  }
-
-  // Capture 30fps media stream from HTML5 video element
-  const captureFn = video as unknown as {
-    captureStream?: (fps?: number) => MediaStream;
-    mozCaptureStream?: (fps?: number) => MediaStream;
-  };
-  const stream: MediaStream | null = captureFn.captureStream
-    ? captureFn.captureStream(30)
-    : captureFn.mozCaptureStream
-      ? captureFn.mozCaptureStream(30)
-      : null;
-
-  if (!stream) {
-    console.warn('[MiniPlayerStream] captureStream is not supported or returned null');
+  // If already connected or connecting, keep streaming without interruption
+  if (activePeerConnection && (activePeerConnection.connectionState === 'connected' || activePeerConnection.connectionState === 'connecting')) {
     return;
   }
 
-  const tracks = stream.getVideoTracks();
-  const firstTrack = tracks[0];
-  if (!firstTrack) {
-    console.warn('[MiniPlayerStream] No video tracks in captured stream');
-    return;
-  }
-
-  const currentTrackId = firstTrack.id;
-  if (activePeerConnection && activeStreamTrackId === currentTrackId && activePeerConnection.connectionState === 'connected') {
-    return; // Already streaming this track cleanly
-  }
-
-  stopWebRTC();
-
-  const pc = new RTCPeerConnection({ iceServers: [] });
-  activePeerConnection = pc;
-  activeStreamTrackId = currentTrackId;
-
-  pc.onconnectionstatechange = () => {
-    console.log('[MiniPlayerStream Sender] Connection state:', pc.connectionState);
-  };
-
-  tracks.forEach((track) => {
-    pc.addTrack(track, stream);
-  });
+  if (isNegotiating) return;
+  isNegotiating = true;
 
   try {
+    const video = getVideoElement();
+    if (!video) return;
+
+    // Ensure video has loaded data before capturing stream
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await new Promise<void>((resolve) => {
+        video.addEventListener('loadeddata', () => resolve(), { once: true });
+        setTimeout(resolve, 1500);
+      });
+    }
+
+    // If audio is playing but video element is paused, ensure it's playing
+    const player = usePlayer.getState();
+    if (player.status === 'playing' && video.paused) {
+      void video.play().catch(() => {});
+    }
+
+    const stream = getMediaStream();
+    if (!stream) {
+      console.warn('[MiniPlayerStream] captureStream is not supported or returned null');
+      return;
+    }
+
+    const tracks = stream.getVideoTracks();
+    const firstTrack = tracks[0];
+    if (!firstTrack) {
+      console.warn('[MiniPlayerStream] No video tracks in captured stream');
+      return;
+    }
+
+    stopWebRTC();
+
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    activePeerConnection = pc;
+
+    pc.onconnectionstatechange = () => {
+      console.log('[MiniPlayerStream Sender] Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        if (activePeerConnection === pc) {
+          activePeerConnection = null;
+        }
+      }
+    };
+
+    tracks.forEach((track) => {
+      pc.addTrack(track, stream);
+    });
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -126,11 +142,13 @@ async function startWebRTC() {
     await waitForIceGathering(pc, 500);
 
     const fullOffer = pc.localDescription;
-    if (fullOffer) {
+    if (fullOffer && activePeerConnection === pc) {
       ep.sendPipOffer({ type: fullOffer.type, sdp: fullOffer.sdp });
     }
   } catch (err) {
     console.warn('[MiniPlayerStream] Failed to create complete offer:', err);
+  } finally {
+    isNegotiating = false;
   }
 }
 
@@ -158,8 +176,6 @@ function syncMiniPlayerVideo() {
 
   if (hasVideo) {
     void startWebRTC();
-  } else {
-    stopWebRTC();
   }
 }
 
