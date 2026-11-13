@@ -45,6 +45,8 @@ export interface StreamStats {
   channels: number | null;
   /** "direct" (googlevideo URLs, by range) or "SABR". */
   mode: 'direct' | 'SABR';
+  /** The addon / API provider name when streaming from an addon (e.g. "PencariMusic", "prodpwh"). */
+  source?: string | null;
 }
 
 /** A music video's picture: a video-only DASH manifest over the same response's direct URLs. */
@@ -337,7 +339,7 @@ export class YouTubeEngine {
             durationSec: lossless.durationSec || durationSec || Math.round(this.audio.duration || 0),
             thumbnails: [],
             client: 'WEB' as PlayerClientName,
-            format: lossless.format,
+            format: `${lossless.format} via ${lossless.sourceName}`,
             stream: {
               codec: lossless.codec,
               itag: null,
@@ -345,6 +347,7 @@ export class YouTubeEngine {
               sampleRateHz: lossless.sampleRateHz,
               channels: 2,
               mode: 'direct',
+              source: lossless.sourceName,
             },
             loudnessDb: null,
           };
@@ -617,7 +620,7 @@ export class YouTubeEngine {
       durationSec: lossless.durationSec || origDurationSec || Math.round(this.audio.duration || 0),
       thumbnails: [],
       client: 'WEB' as PlayerClientName,
-      format: lossless.format,
+      format: `${lossless.format} via ${lossless.sourceName}`,
       stream: {
         codec: lossless.codec,
         itag: null,
@@ -625,6 +628,7 @@ export class YouTubeEngine {
         sampleRateHz: lossless.sampleRateHz,
         channels: 2,
         mode: 'direct',
+        source: lossless.sourceName,
       },
       loudnessDb: null,
     };

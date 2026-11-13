@@ -34,7 +34,7 @@ function describeStream(np: NowPlaying): string | null {
     s.bitrateKbps ? `${s.bitrateKbps} kbps` : null,
     s.channels ? ({ 1: 'Mono', 2: 'Stereo' } as Record<number, string>)[s.channels] ?? `${s.channels} channels` : null,
     s.itag ? `itag ${s.itag}` : null,
-    s.client ? `${s.client} ${s.mode}` : null,
+    s.source ? `via ${s.source}` : s.client ? `${s.client} ${s.mode}` : null,
   ];
   return parts.filter(Boolean).join(' • ');
 }

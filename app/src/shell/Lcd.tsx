@@ -165,10 +165,16 @@ export function Lcd() {
             {track?.explicit && <ExplicitBadge size={11} />}
             {nowPlaying?.stream?.codec === 'FLAC' && (
               <span
-                className="ml-2 inline-flex items-center text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase"
+                className="ml-2 inline-flex items-center gap-1 text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase select-none"
                 title={nowPlaying.streamInfo ?? 'Lossless Audio'}
               >
-                Lossless
+                <span>Lossless</span>
+                {nowPlaying.stream.source && (
+                  <>
+                    <span className="opacity-40">·</span>
+                    <span className="text-emerald-200 normal-case font-semibold">{nowPlaying.stream.source}</span>
+                  </>
+                )}
               </span>
             )}
           </div>
