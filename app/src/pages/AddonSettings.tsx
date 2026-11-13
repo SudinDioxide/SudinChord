@@ -51,7 +51,7 @@ export function AddonSettings() {
           onChange={setLosslessEnabled}
         />
 
-        {/* ClashFLAC Direct Qobuz & Tidal Provider Card */}
+        {/* ClashFLAC Direct AAC & Opus Provider Card */}
         <div className="flex flex-col gap-3 p-4 border-t border-white/5 bg-quaternary/15">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -60,13 +60,13 @@ export function AddonSettings() {
               </div>
               <div className="flex flex-col">
                 <span className="type-body-emphasized text-primary flex items-center gap-2">
-                  ClashFLAC Lossless Engine
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300">
-                    Qobuz • Tidal • JioSaavn
+                  ClashFLAC Audio Engine
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300">
+                    AAC & Opus Only
                   </span>
                 </span>
                 <span className="type-callout text-secondary">
-                  Direct Hi-Res FLAC (up to 24-bit/192kHz) and Hi-Fi master audio streams.
+                  Locked strictly to high-fidelity AAC (320kbps) & Opus audio streams. Non-AAC/Opus streams are filtered out.
                 </span>
               </div>
             </div>
@@ -86,7 +86,7 @@ export function AddonSettings() {
                   <Radio size={14} className="text-key" /> Preferred Stream Engine:
                 </span>
                 <div className="inline-flex rounded-lg border border-white/10 bg-quaternary/40 p-0.5">
-                  {(['qobuz', 'tidal', 'jiosaavn'] as ClashEnginePriority[]).map((p) => (
+                  {(['jiosaavn', 'tidal', 'qobuz'] as ClashEnginePriority[]).map((p) => (
                     <button
                       key={p}
                       onClick={() => updateClash({ priority: p })}
@@ -96,7 +96,7 @@ export function AddonSettings() {
                           : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      {p === 'qobuz' ? 'Qobuz Hi-Res' : p === 'tidal' ? 'Tidal HiFi' : 'JioSaavn'}
+                      {p === 'jiosaavn' ? 'JioSaavn (320k AAC)' : p === 'tidal' ? 'Tidal (AAC)' : 'Qobuz'}
                     </button>
                   ))}
                 </div>

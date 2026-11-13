@@ -1,5 +1,7 @@
 import { addonStore, type AddonTrack, type AddonStreamResult, type InstalledAddon } from '@/data/addon/addonManager';
-import { resolveClashFlacTrack, getClashFlacConfig } from './clashflacResolver';
+import { resolveClashFlacTrack, getClashFlacConfig, isAacOrOpus } from './clashflacResolver';
+
+export { isAacOrOpus };
 
 export interface ResolvedLosslessTrack {
   url: string;
@@ -67,6 +69,10 @@ async function querySingleAddon(
       let score = 0;
       const candTitleNorm = cand.title.toLowerCase().replace(/[^a-z0-9]/g, ' ');
 
+      // User constraint: ONLY play AAC and Opus streams
+      const candFmt = cand.format || cand.audioQuality || '';
+      if (candFmt && !isAacOrOpus(candFmt)) continue;
+
       // Word matches
       let matchedWords = 0;
       for (const word of targetWords) {
@@ -84,8 +90,8 @@ async function querySingleAddon(
         }
       }
 
-      // Quality preference (Lossless/FLAC)
-      if (cand.format?.toLowerCase() === 'flac' || cand.audioQuality?.toUpperCase() === 'LOSSLESS') {
+      // Quality preference (AAC/Opus)
+      if (cand.format?.toLowerCase() === 'aac' || cand.format?.toLowerCase() === 'opus') {
         score += 5;
       }
 
@@ -108,8 +114,8 @@ async function querySingleAddon(
 
     // Fetch stream URL for the best candidate
     let streamUrl = bestTrack.streamURL;
-    let codec = bestTrack.format?.toUpperCase() || 'FLAC';
-    let bitrateKbps = bestTrack.bitrate || 1411;
+    let codec = bestTrack.format?.toUpperCase() || 'AAC';
+    let bitrateKbps = bestTrack.bitrate || 320;
     let sampleRateHz = 44100;
 
     if (!streamUrl) {
@@ -122,9 +128,12 @@ async function querySingleAddon(
 
       streamUrl = streamData.url;
       if (streamData.codec) codec = streamData.codec.toUpperCase();
-      if (streamData.bitrate || streamData.kbps) bitrateKbps = streamData.bitrate || streamData.kbps || 1411;
+      if (streamData.bitrate || streamData.kbps) bitrateKbps = streamData.bitrate || streamData.kbps || 320;
       if (streamData.sampleRate) sampleRateHz = streamData.sampleRate;
     }
+
+    // Strictly enforce: ONLY play AAC and Opus
+    if (!isAacOrOpus(codec, bestTrack.format)) return null;
 
     const candDur = bestTrack.duration || (bestTrack.durationMs ? Math.round(bestTrack.durationMs / 1000) : 0);
 
@@ -133,7 +142,7 @@ async function querySingleAddon(
       title: bestTrack.title,
       artist: bestTrack.artist || sArtist,
       durationSec: candDur || durationSec || 0,
-      format: `${codec} ${bitrateKbps}kbps Lossless`,
+      format: `${codec} ${bitrateKbps}kbps`,
       codec,
       bitrateKbps,
       sampleRateHz,
@@ -160,20 +169,20 @@ export async function resolveLosslessTrack({
   const sArtist = cleanArtist(artist || '');
   if (!sTitle) return null;
 
-  // 1. Check built-in ClashFLAC / Qobuz / Tidal / JioSaavn resolver
+  // 1. Check built-in ClashFLAC / JioSaavn / Tidal resolver (strictly AAC / Opus only)
   const clashConfig = getClashFlacConfig();
   if (clashConfig.enabled) {
     try {
       const clashMatch = await resolveClashFlacTrack({ title: sTitle, artist: sArtist, durationSec });
-      if (clashMatch) return clashMatch;
+      if (clashMatch && isAacOrOpus(clashMatch.codec, clashMatch.format)) return clashMatch;
     } catch {}
   }
 
-  // 2. Check user-configured custom addons
+  // 2. Check user-configured custom addons (strictly AAC / Opus only)
   const enabledAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
   for (const addon of enabledAddons) {
     const match = await querySingleAddon(addon, sTitle, sArtist, durationSec);
-    if (match) return match;
+    if (match && isAacOrOpus(match.codec, match.format)) return match;
   }
 
   return null;

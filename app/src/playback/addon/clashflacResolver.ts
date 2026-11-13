@@ -9,7 +9,7 @@ const STORAGE_QUALITY_KEY = 'sudinchord_clashflac_quality';
 const DEFAULT_API_BASE = 'https://clashflac.kanjijewels.com';
 const JIOSAAVN_API = 'https://jiosavan.clashgram.workers.dev/api';
 
-export type ClashEnginePriority = 'qobuz' | 'tidal' | 'jiosaavn';
+export type ClashEnginePriority = 'jiosaavn' | 'tidal' | 'qobuz';
 
 export interface ClashFlacConfig {
   enabled: boolean;
@@ -18,12 +18,35 @@ export interface ClashFlacConfig {
   quality: 'UHD' | 'HD';
 }
 
+/**
+ * Strict validator to guarantee playback is locked to AAC and Opus only
+ */
+export function isAacOrOpus(codec?: string | null, format?: string | null): boolean {
+  const combined = `${codec || ''} ${format || ''}`.toUpperCase();
+  if (
+    combined.includes('FLAC') ||
+    combined.includes('MP3') ||
+    combined.includes('WAV') ||
+    combined.includes('ALAC') ||
+    combined.includes('VORBIS') ||
+    combined.includes('WMA')
+  ) {
+    return false;
+  }
+  return (
+    combined.includes('AAC') ||
+    combined.includes('OPUS') ||
+    combined.includes('MP4A') ||
+    combined.includes('M4A')
+  );
+}
+
 export function getClashFlacConfig(): ClashFlacConfig {
   if (typeof window === 'undefined' || !window.localStorage) {
     return {
       enabled: true,
       apiBase: DEFAULT_API_BASE,
-      priority: 'qobuz',
+      priority: 'jiosaavn',
       quality: 'UHD',
     };
   }
@@ -31,7 +54,7 @@ export function getClashFlacConfig(): ClashFlacConfig {
   const enabled = localStorage.getItem(STORAGE_ENABLED_KEY) !== 'false';
   const apiBase = localStorage.getItem(STORAGE_API_BASE_KEY) || DEFAULT_API_BASE;
   const rawPriority = localStorage.getItem(STORAGE_PRIORITY_KEY) as ClashEnginePriority | null;
-  const priority = rawPriority === 'tidal' || rawPriority === 'jiosaavn' || rawPriority === 'qobuz' ? rawPriority : 'qobuz';
+  const priority = rawPriority === 'tidal' || rawPriority === 'qobuz' || rawPriority === 'jiosaavn' ? rawPriority : 'jiosaavn';
   const quality = localStorage.getItem(STORAGE_QUALITY_KEY) === 'HD' ? 'HD' : 'UHD';
 
   return { enabled, apiBase: apiBase.replace(/\/+$/, ''), priority, quality };
@@ -149,6 +172,9 @@ async function resolveQobuz(
       const isHiRes = bitDepth > 16 || sampleRate > 44.1;
       const codec = streamData.format?.toUpperCase() || 'FLAC';
 
+      // Strictly enforce AAC / Opus only
+      if (!isAacOrOpus(codec, streamData.format)) return null;
+
       return {
         url: streamData.stream_url,
         title: bestItem.title || title,
@@ -184,6 +210,7 @@ async function resolveQobuz(
       const bitDepth = resData.bit_depth || 24;
       const sampleRateHz = resData.sample_rate || 96000;
       const codec = resData.codec?.toUpperCase() || 'FLAC';
+      if (!isAacOrOpus(codec)) return null;
       return {
         url: resData.stream_url,
         title: bestItem.title || title,
@@ -276,16 +303,17 @@ async function resolveTidal(
     if (resData?.stream_url) {
       const codec = resData.codec?.toUpperCase() || 'FLAC';
       const bitrateKbps = resData.bitrate || 1411;
+      if (!isAacOrOpus(codec)) return null;
       return {
         url: resData.stream_url,
         title: bestItem.title || title,
         artist: bestItem.artist || artist,
         durationSec: bestItem.duration_sec || durationSec || 0,
-        format: `${codec} ${bitrateKbps}kbps Lossless`,
+        format: `${codec} ${bitrateKbps}kbps`,
         codec,
         bitrateKbps,
         sampleRateHz: resData.sample_rate || 44100,
-        sourceName: 'Tidal HiFi (ClashFLAC)',
+        sourceName: 'Tidal (ClashFLAC)',
       };
     }
   }
@@ -425,7 +453,7 @@ export async function resolveClashFlacTrack({
   for (const queryEngine of engines) {
     try {
       const match = await queryEngine();
-      if (match?.url) {
+      if (match?.url && isAacOrOpus(match.codec, match.format)) {
         trackLog.i(`ClashFLAC resolved high quality stream from ${match.sourceName}: ${match.format}`);
         return match;
       }
@@ -436,3 +464,4 @@ export async function resolveClashFlacTrack({
 
   return null;
 }
+

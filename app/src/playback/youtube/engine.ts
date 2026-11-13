@@ -286,13 +286,13 @@ export class YouTubeEngine {
       }
     }
 
-    // Support playing Lossless Audio from user-configured Addon
+    // Support playing High-Fidelity Audio from user-configured Addon / ClashFLAC (strictly AAC and Opus only)
     if (!videoId.startsWith('local:') && (title || artist)) {
       try {
-        const { resolveLosslessTrack } = await import('@/playback/addon/addonResolver');
+        const { resolveLosslessTrack, isAacOrOpus } = await import('@/playback/addon/addonResolver');
         const lossless = await resolveLosslessTrack({ title, artist, durationSec });
-        if (lossless?.url) {
-          trackLog.i(`Playing Lossless stream from ${lossless.sourceName}`, videoId);
+        if (lossless?.url && isAacOrOpus(lossless.codec, lossless.format)) {
+          trackLog.i(`Playing high fidelity stream (${lossless.codec}) from ${lossless.sourceName}`, videoId);
           if (this.player) {
             try {
               await this.player.unload();
