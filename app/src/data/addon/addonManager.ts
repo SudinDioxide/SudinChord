@@ -125,12 +125,27 @@ class AddonStore {
       if (rawAddons) {
         const parsed = JSON.parse(rawAddons) as InstalledAddon[];
         if (Array.isArray(parsed)) {
-          this.state.addons = parsed;
+          // Ensure all community presets exist and are enabled by default
+          const existingIds = new Set(parsed.map((a) => a.id));
+          const merged = parsed.map((a) => ({ ...a, enabled: true }));
+          for (const preset of COMMUNITY_ADDONS) {
+            if (!existingIds.has(preset.id)) {
+              merged.push({
+                id: preset.id,
+                url: preset.url.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, ''),
+                name: preset.name,
+                description: preset.description,
+                enabled: true,
+                status: 'connected',
+                errorMessage: null,
+                createdAt: Date.now(),
+              });
+            }
+          }
+          this.state.addons = merged;
         }
       } else {
-        // Pre-populate with default BitChord community addons:
-        // Only enable PencariMusic (the verified open lossless endpoint) by default.
-        // Other community presets (requiring Discord login/tokens) are available in Settings.
+        // Pre-populate with all BitChord community addons enabled by default
         const legacyUrl = localStorage.getItem(LEGACY_STORAGE_URL_KEY);
         if (legacyUrl) {
           void this.addAddon(legacyUrl);
@@ -140,7 +155,7 @@ class AddonStore {
             url: preset.url.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, ''),
             name: preset.name,
             description: preset.description,
-            enabled: preset.id === 'org.pencarimovie.music',
+            enabled: true,
             status: 'connected',
             errorMessage: null,
             createdAt: Date.now() + index,

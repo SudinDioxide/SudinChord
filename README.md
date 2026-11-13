@@ -10,11 +10,18 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 ## ✨ Highlights & Features
 
-- **Lossless Audio Streaming Addons:** Connect custom streaming endpoints (e.g. PencariMovie / Tidal / Qobuz backends) to stream studio-quality lossless FLAC directly.
-- **Enhanced Local Music Library (v1.1.6):**
-  - **Modern Desktop UI:** Completely redesigned with Apple macOS-inspired geometry — crisp rounded rectangles (`rounded-[10px]`, `rounded-[8px]`, `rounded-[5px]`) replacing legacy pill/oval shapes.
-  - **Smart Badge Formatting:** Collision-free track rows with compact high-resolution indicators (`HI-RES`, `24-BIT`) and dedicated end-padding.
-  - **Albums & Artists Views:** Browse by album artwork with clean covers or by artist with modern squircle avatars.
+- **Automatic Mid-Playback Lossless FLAC Upgrade (v1.1.7):**
+  - **Instant 0ms Playback Start:** Songs start playing instantly with the standard YouTube Opus/AAC stream without waiting for remote queries or buffering stalls.
+  - **Background FLAC Discovery & Strict Matching:** Runs a parallel background lookup against active addons with strict track title, artist, and duration verification (`trackMatcher.best()`) to eliminate false positives.
+  - **Seamless Mid-Song Hot-Swap:** When a verified FLAC stream is located, SudinChord automatically hot-swaps audio playback at the exact current timestamp (`audio.currentTime`) without restarting or stuttering.
+  - **Live Format UI Update:** Format badges and stream info dynamically update to `Lossless FLAC` with sample rate and bitrate metrics.
+  - **In-Memory Lossless Caching:** Verified FLAC streams are cached in-memory for instant replay.
+- **Pre-Enabled Community Addons by Default (v1.1.7):**
+  - All verified BitChord community addons (PencariMusic, prodpwh, Confih Hi-Res, Qobuz [Heisenberg], and juanjob hi-res) are pre-installed and enabled out-of-the-box.
+- **Enhanced Local Music Library & UI Polish (v1.1.6 - v1.1.7):**
+  - **Modern Desktop UI:** Clean Apple macOS-inspired geometry — crisp rounded rectangles (`rounded-[10px]`, `rounded-[8px]`, `rounded-[5px]`) replacing legacy pill/oval shapes.
+  - **Refined Tracklist Spacing:** Clean gutter padding (`ps-4`) preventing long song titles and `HI-RES` / `24-BIT` badges from crowding artist columns.
+  - **Albums & Artists Views:** Browse by album artwork or artist with modern squircle avatars.
   - **Focused Album Detail View:** Dedicated view for album tracks with streamlined playback and shuffle controls.
   - **Quick Folder Management:** One-click **Reveal** in File Explorer and instant **Rescan** for your local music folder.
   - **Format Support:** Full HTTP 206 byte-range seeking and automatic on-the-fly ALAC decoding for FLAC, ALAC, WAV, AAC, MP3, OGG, and OPUS.
@@ -34,7 +41,7 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-👉 **[Download SudinChord Setup 1.1.6.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.6/SudinChord.Setup.1.1.6.exe)**
+👉 **[Download SudinChord Setup 1.1.7.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.7/SudinChord.Setup.1.1.7.exe)**
 
 Or view all releases and release notes at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
 
@@ -78,7 +85,7 @@ pnpm desktop:build
 ```
 
 The output files will be created in `desktop/dist-electron/`:
-- `SudinChord-Setup-1.1.6.exe` (Windows NSIS Installer)
+- `SudinChord-Setup-1.1.7.exe` (Windows NSIS Installer)
 - `win-unpacked/SudinChord.exe` (Portable Windows Application)
 
 ---
