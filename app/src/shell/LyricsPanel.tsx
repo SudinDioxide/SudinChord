@@ -60,7 +60,7 @@ import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { LyricClock } from '@/lyrics/clock';
 import { onUngrantedChange, ungrantedOrigins } from '@/lyrics/http';
 import type { SourceState } from '@/lyrics/repository';
-import { enabledSources } from '@/lyrics/settings';
+import { enabledSources, useLyricsSettings } from '@/lyrics/settings';
 import { sourceById, type LyricsSourceId } from '@/lyrics/sources';
 import { useLyrics, useLyricsUi } from '@/lyrics/useLyrics';
 import { getAudio, getPlayhead, usePlayer } from '@/state/player';
@@ -328,6 +328,7 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
   const states = useLyricsUi((s) => s.states[videoId]) ?? NO_STATES;
   const picked = useLyricsUi((s) => s.picked[videoId]);
   const pick = useLyricsUi((s) => s.pick);
+  const { tamilScriptPreference, setTamilScriptPreference } = useLyricsSettings();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [settings, setSettings] = useState(false);
   const close = useCallback(() => setAnchor(null), []);
@@ -342,14 +343,28 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
           : 'flex items-center justify-between px-4 pt-4 pb-1'
       }
     >
-      <button
-        className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 type-callout-emphasized text-secondary hover:bg-quinary"
-        aria-haspopup="menu"
-        onClick={(e) => setAnchor(e.currentTarget)}
-      >
-        <span>{label}</span>
-        <ChevronDown size={14} />
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 type-callout-emphasized text-secondary hover:bg-quinary"
+          aria-haspopup="menu"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
+          <span>{label}</span>
+          <ChevronDown size={14} />
+        </button>
+        {current === 'tamil2lyrics' && (
+          <button
+            className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+            title="Click to cycle Tamil script format (Both / Tamil / Tanglish)"
+            onClick={() => {
+              const next = tamilScriptPreference === 'both' ? 'tamil' : tamilScriptPreference === 'tamil' ? 'english' : 'both';
+              setTamilScriptPreference(next);
+            }}
+          >
+            {tamilScriptPreference === 'both' ? 'Both' : tamilScriptPreference === 'tamil' ? 'தமிழ்' : 'Tanglish'}
+          </button>
+        )}
+      </div>
       {anchor && (
         <Menu anchor={anchor} placement="below-end" onClose={close} label="Lyrics provider">
           <MenuItem checked={!picked} onSelect={() => (close(), pick(videoId, null))}>
@@ -378,6 +393,30 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
               </MenuItem>
             );
           })}
+          {current === 'tamil2lyrics' && (
+            <>
+              <MenuSeparator />
+              <MenuHeader>Tamil Script Preference</MenuHeader>
+              <MenuItem
+                checked={tamilScriptPreference === 'both'}
+                onSelect={() => (close(), setTamilScriptPreference('both'))}
+              >
+                Both (Tamil &amp; Tanglish)
+              </MenuItem>
+              <MenuItem
+                checked={tamilScriptPreference === 'tamil'}
+                onSelect={() => (close(), setTamilScriptPreference('tamil'))}
+              >
+                Tamil Script (தமிழ்)
+              </MenuItem>
+              <MenuItem
+                checked={tamilScriptPreference === 'english'}
+                onSelect={() => (close(), setTamilScriptPreference('english'))}
+              >
+                English (Tanglish)
+              </MenuItem>
+            </>
+          )}
           <MenuSeparator />
           <MenuItem onSelect={() => (close(), setSettings(true))}>Lyric Settings…</MenuItem>
         </Menu>

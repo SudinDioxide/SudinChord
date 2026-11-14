@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { withBackgroundVocals } from './model';
 import { decodeEntities, parseEnhancedLrc, parseKaraoke, parseLrc, parseProvider, parseTtml } from './parse';
+import { parseTamil2LyricsHtml } from './providers';
 import { writeTtml } from './ttml';
 
 const APPLE = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
@@ -109,5 +110,41 @@ describe('TTML writer', () => {
     expect(ttml).toContain('<transliteration><text for="l_0">Konnichiwa</text></transliteration>');
     expect(ttml).toContain('<translation><text for="l_0">Hello</text></translation>');
     expect(ttml).toContain('itunes:key="l_0"');
+  });
+});
+
+describe('tamil2lyrics parser', () => {
+  const SAMPLE_HTML = `
+    <article class="t2l-single-lyrics">
+      <div data-t2l-tab-panel="english">
+        <p><strong>Singers :</strong> Anirudh</p>
+        <div class="t2l-part-divider"><span>Male Part</span></div>
+        <p>Hukum<br />Tigerka hukum</p>
+      </div>
+      <div data-t2l-tab-panel="tamil">
+        <p><strong>பாடகர்கள் :</strong> அனிருத்</p>
+        <div class="t2l-part-divider"><span>ஆண்</span></div>
+        <p>ஹுக்கும்<br />டைகர்கா ஹுக்கும்</p>
+      </div>
+    </article>
+  `;
+
+  it('extracts English (Tanglish) lines when scriptPreference is english', () => {
+    const lines = parseTamil2LyricsHtml(SAMPLE_HTML, 'english').filter((l) => l.text);
+    expect(lines.some((l) => l.text.includes('Hukum'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('Tigerka hukum'))).toBe(true);
+    expect(lines.every((l) => !/[\u0b80-\u0bff]/.test(l.text))).toBe(true);
+  });
+
+  it('extracts Tamil script lines when scriptPreference is tamil', () => {
+    const lines = parseTamil2LyricsHtml(SAMPLE_HTML, 'tamil').filter((l) => l.text);
+    expect(lines.some((l) => l.text.includes('ஹுக்கும்'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('டைகர்கா ஹுக்கும்'))).toBe(true);
+  });
+
+  it('pairs or combines scripts when scriptPreference is both', () => {
+    const lines = parseTamil2LyricsHtml(SAMPLE_HTML, 'both').filter((l) => l.text);
+    // In closely matched lines, it pairs Tamil lines with romanized Tanglish
+    expect(lines.some((l) => l.text.includes('ஹுக்கும்') || l.text.includes('Tamil Script'))).toBe(true);
   });
 });

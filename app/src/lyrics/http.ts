@@ -26,6 +26,7 @@ export const LYRIC_EXTENSION_ORIGINS = [
   'https://api.paxsenix.org',
   'https://lyrics-api.boidu.dev',
   'https://unison.boidu.dev',
+  'https://www.tamil2lyrics.com',
 ];
 
 const DIRECT_TIMEOUT_MS = 6000;

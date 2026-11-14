@@ -28,12 +28,14 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
     paxsenixKey,
     lyricaUrl,
     lyricaAi,
+    tamilScriptPreference,
     setEnabled,
     move,
     setPreferSyllables,
     setPaxsenixKey,
     setLyricaUrl,
     setLyricaAi,
+    setTamilScriptPreference,
     reset,
   } = useLyricsSettings();
   const [granted, setGranted] = useState<string[] | null>(null);
@@ -110,6 +112,33 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
               <span className="truncate type-callout text-secondary">Keep looking past a line-timed answer for a word-timed one.</span>
             </span>
           </label>
+
+          <h3 className={section}>Tamil Lyrics Script (tamil2lyrics)</h3>
+          <p className={note}>Choose your preferred script format for Tamil songs.</p>
+          <div className={`${group} flex flex-col`}>
+            {[
+              { id: 'both', label: 'Both (Tamil & Tanglish)', desc: 'Tamil script alongside English romanized transliteration' },
+              { id: 'tamil', label: 'Tamil Script (தமிழ்)', desc: 'Original Tamil Unicode text only' },
+              { id: 'english', label: 'English (Tanglish)', desc: 'Romanized phonetic lyrics only' },
+            ].map((opt) => (
+              <label
+                key={opt.id}
+                className={`${row} cursor-pointer hover:bg-quaternary/40 transition-colors [&+&]:border-t-[0.5px] [&+&]:border-t-divider`}
+              >
+                <input
+                  type="radio"
+                  name="tamilScript"
+                  className={checkbox}
+                  checked={tamilScriptPreference === opt.id}
+                  onChange={() => setTamilScriptPreference(opt.id as any)}
+                />
+                <span className="flex min-w-0 flex-col">
+                  <span className="type-body-emphasized">{opt.label}</span>
+                  <span className="truncate type-callout text-secondary">{opt.desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
 
           <h3 className={section}>Extension access</h3>
           {granted === null ? (

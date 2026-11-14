@@ -757,6 +757,127 @@ export async function genius(q: LyricsQuery): Promise<Parsed | null> {
   return null;
 }
 
+// ---- tamil2lyrics (https://www.tamil2lyrics.com) ---------------------------
+
+export function parseTamil2LyricsHtml(
+  html: string,
+  scriptPreference: 'both' | 'tamil' | 'english' = 'both',
+): LyricLine[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  const parsePanel = (panel: Element | null): string[] => {
+    if (!panel) return [];
+    // Convert part dividers to bracketed labels like [Male Part], [Chorus], etc.
+    panel.querySelectorAll('.t2l-part-divider').forEach((div) => {
+      const label = div.textContent?.trim();
+      div.replaceWith(`\n[${label || 'Part'}]\n`);
+    });
+    panel.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+    panel.querySelectorAll('p').forEach((p) => {
+      p.append('\n\n');
+    });
+    panel.querySelectorAll('script, style, button, svg').forEach((el) => el.remove());
+
+    return (panel.textContent ?? '')
+      .split('\n')
+      .map((l) => decodeEntities(l.trim()))
+      .filter((l) => l.length > 0);
+  };
+
+  const enPanel = doc.querySelector('div[data-t2l-tab-panel="english"]');
+  const taPanel = doc.querySelector('div[data-t2l-tab-panel="tamil"]');
+
+  const enLines = parsePanel(enPanel);
+  const taLines = parsePanel(taPanel);
+
+  if (!enLines.length && !taLines.length) return [];
+
+  const toLyricLines = (strings: string[], romanizedMap?: Map<number, string>): LyricLine[] => {
+    const out: LyricLine[] = [];
+    strings.forEach((str, idx) => {
+      if (str.startsWith('[') && str.endsWith(']') && out.length && out.at(-1)!.text) {
+        out.push(line(0, ''));
+      }
+      const roman = romanizedMap?.get(idx);
+      out.push(line(0, str, roman ? { romanized: roman } : {}));
+    });
+    return out;
+  };
+
+  if (scriptPreference === 'english') {
+    return toLyricLines(enLines.length ? enLines : taLines);
+  }
+
+  if (scriptPreference === 'tamil') {
+    return toLyricLines(taLines.length ? taLines : enLines);
+  }
+
+  // Preference: 'both'
+  if (taLines.length && enLines.length) {
+    if (Math.abs(taLines.length - enLines.length) <= 3) {
+      const romanMap = new Map<number, string>();
+      enLines.forEach((en, i) => {
+        if (!en.startsWith('[')) romanMap.set(i, en);
+      });
+      return toLyricLines(taLines, romanMap);
+    }
+
+    const combined: string[] = [
+      '--- தமிழ் (Tamil Script) ---',
+      ...taLines,
+      '',
+      '--- English (Tanglish) ---',
+      ...enLines,
+    ];
+    return toLyricLines(combined);
+  }
+
+  return toLyricLines(taLines.length ? taLines : enLines);
+}
+
+export async function tamil2lyrics(
+  q: LyricsQuery,
+  scriptPreference: 'both' | 'tamil' | 'english' = 'both',
+): Promise<Parsed | null> {
+  const cleanTitle = q.title
+    .replace(/\s*[([]\s*(feat|ft|featuring|with)\b[^)\]]*[)\]]/gi, ' ')
+    .replace(/\s*[([]\s*(official\s*)?(music\s*)?(video|audio|visuali[sz]er|lyrics?\s*video|lyrics?|m\/?v|hd|hq|4k|full\s*song)\s*[)\]]/gi, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const cleanArtist = q.artist
+    .replace(/ - Topic$/i, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const attempts = [
+    cleanArtist ? `${cleanTitle} ${cleanArtist}`.trim() : cleanTitle,
+    cleanTitle,
+  ].filter(Boolean);
+
+  for (const query of attempts) {
+    const searchUrl = `https://www.tamil2lyrics.com/?s=${encodeURIComponent(query)}`;
+    const searchHtml = await lyricsGet(searchUrl, { route: 'extension' });
+    if (!searchHtml) continue;
+
+    const linkMatches = [...searchHtml.matchAll(/href="(https:\/\/www\.tamil2lyrics\.com\/lyrics\/[^"]+)"/gi)];
+    const songUrl = linkMatches[0]?.[1];
+    if (!songUrl) continue;
+
+    const songHtml = await lyricsGet(songUrl, { route: 'extension' });
+    if (!songHtml) continue;
+
+    const lines = parseTamil2LyricsHtml(songHtml, scriptPreference);
+    if (lines.length) {
+      return { lines, ttml: null };
+    }
+  }
+
+  return null;
+}
+
 // ---- Lyrica (Lyrica API - Wilooper/Lyrica / test-0k.onrender.com) ---------------------------
 
 const DEFAULT_LYRICA_URL = 'https://test-0k.onrender.com';

@@ -89,9 +89,9 @@ export interface LookupOptions {
 export async function lookupLyrics(track: LyricsTrack, { only, onSource }: LookupOptions = {}): Promise<LyricsResult | null> {
   const sequence = only ? [only] : enabledSources();
   if (!sequence.length) return null;
-  const { paxsenixKey, preferSyllables } = useLyricsSettings.getState();
+  const { paxsenixKey, preferSyllables, tamilScriptPreference } = useLyricsSettings.getState();
   // Key primarily on videoId so both App and PIP callers hit the exact same cache
-  const key = `${track.videoId}|${only ?? ''}|${sequence.join(',')}|${preferSyllables}`;
+  const key = `${track.videoId}|${only ?? ''}|${sequence.join(',')}|${preferSyllables}|${tamilScriptPreference}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
 
@@ -168,6 +168,8 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
             return providers.musixmatch(query);
           case 'genius':
             return providers.genius(query);
+          case 'tamil2lyrics':
+            return providers.tamil2lyrics(query, tamilScriptPreference);
           case 'embedded':
             return Promise.resolve(null);
         }
@@ -185,13 +187,16 @@ export async function lookupLyrics(track: LyricsTrack, { only, onSource }: Looku
       };
 
       // Fast concurrent race: all enabled sources are requested in parallel
-      const racing = sequence.map((source) => ({ source, job: source === 'genius' ? null : run(source) }));
+      const racing = sequence.map((source) => ({
+        source,
+        job: source === 'genius' || source === 'tamil2lyrics' ? null : run(source),
+      }));
       let lineSynced: LyricsResult | null = null;
       let plain: LyricsResult | null = null;
       let winner: LyricsResult | null = null;
 
       for (const entry of racing) {
-        if (entry.source === 'genius' && (lineSynced || plain)) continue;
+        if ((entry.source === 'genius' || entry.source === 'tamil2lyrics') && (lineSynced || plain)) continue;
         const found = await (entry.job ?? run(entry.source));
         if (!found) continue;
 

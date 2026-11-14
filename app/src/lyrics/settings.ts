@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { LYRICS_SOURCES, orderedSources, type LyricsSourceId } from './sources';
 
+export type TamilScriptPreference = 'both' | 'tamil' | 'english';
+
 /**
  * Which lyric providers are asked, and in what order (the desktop's lyric
  * settings). Kept in localStorage; a source added in a later build lands
@@ -17,17 +19,20 @@ interface LyricsSettings {
   lyricaUrl: string;
   /** Whether to request server-side AI romanization/translation (requires GROQ_API_KEY on Lyrica server) */
   lyricaAi: boolean;
+  /** Preferred script for tamil2lyrics: both (Tamil & Tanglish), tamil (script only), or english (Tanglish only) */
+  tamilScriptPreference: TamilScriptPreference;
   setEnabled: (id: LyricsSourceId, on: boolean) => void;
   move: (id: LyricsSourceId, by: -1 | 1) => void;
   setPreferSyllables: (on: boolean) => void;
   setPaxsenixKey: (key: string) => void;
   setLyricaUrl: (url: string) => void;
   setLyricaAi: (on: boolean) => void;
+  setTamilScriptPreference: (pref: TamilScriptPreference) => void;
   reset: () => void;
 }
 
 const KEY = 'bitchord:lyrics';
-type Saved = Pick<LyricsSettings, 'order' | 'disabled' | 'preferSyllables' | 'paxsenixKey' | 'lyricaUrl' | 'lyricaAi'>;
+type Saved = Pick<LyricsSettings, 'order' | 'disabled' | 'preferSyllables' | 'paxsenixKey' | 'lyricaUrl' | 'lyricaAi' | 'tamilScriptPreference'>;
 
 const DEFAULTS: Saved = {
   order: LYRICS_SOURCES.map((s) => s.id),
@@ -37,6 +42,7 @@ const DEFAULTS: Saved = {
   paxsenixKey: '',
   lyricaUrl: 'https://test-0k.onrender.com',
   lyricaAi: false,
+  tamilScriptPreference: 'both',
 };
 
 function load(): Saved {
@@ -51,8 +57,8 @@ function load(): Saved {
 export const useLyricsSettings = create<LyricsSettings>()((set, get) => {
   const save = (change: Partial<Saved>) => {
     set(change);
-    const { order, disabled, preferSyllables, paxsenixKey, lyricaUrl, lyricaAi } = get();
-    localStorage.setItem(KEY, JSON.stringify({ order, disabled, preferSyllables, paxsenixKey, lyricaUrl, lyricaAi }));
+    const { order, disabled, preferSyllables, paxsenixKey, lyricaUrl, lyricaAi, tamilScriptPreference } = get();
+    localStorage.setItem(KEY, JSON.stringify({ order, disabled, preferSyllables, paxsenixKey, lyricaUrl, lyricaAi, tamilScriptPreference }));
   };
   return {
     ...load(),
@@ -69,6 +75,7 @@ export const useLyricsSettings = create<LyricsSettings>()((set, get) => {
     setPaxsenixKey: (paxsenixKey) => save({ paxsenixKey: paxsenixKey.trim() }),
     setLyricaUrl: (lyricaUrl) => save({ lyricaUrl: lyricaUrl.trim() }),
     setLyricaAi: (lyricaAi) => save({ lyricaAi }),
+    setTamilScriptPreference: (tamilScriptPreference) => save({ tamilScriptPreference }),
     reset: () => save(DEFAULTS),
   };
 });

@@ -22,6 +22,7 @@ export const LYRICS_SOURCES = [
   { id: 'lrclib', label: 'LRCLIB', detail: 'Whole lines only, and always up', wordSynced: false },
   { id: 'musixmatch', label: 'Musixmatch', detail: 'Whole lines, from the biggest lyrics database there is', wordSynced: false },
   { id: 'genius', label: 'Genius', detail: 'Plain text fallback, massive web catalogue', wordSynced: false },
+  { id: 'tamil2lyrics', label: 'tamil2lyrics', detail: 'Tamil & Tanglish song lyrics with script selection', wordSynced: false },
   { id: 'embedded', label: 'Embedded File', detail: 'Lyrics embedded in audio metadata tags', wordSynced: false },
 ] as const;
 
