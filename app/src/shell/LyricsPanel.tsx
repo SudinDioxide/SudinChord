@@ -60,6 +60,8 @@ import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { LyricClock } from '@/lyrics/clock';
 import { onUngrantedChange, ungrantedOrigins } from '@/lyrics/http';
 import type { SourceState } from '@/lyrics/repository';
+import { forgetLyrics } from '@/lyrics/repository';
+import { queryClient } from '@/lib/queryClient';
 import { enabledSources, useLyricsSettings } from '@/lyrics/settings';
 import { sourceById, type LyricsSourceId } from '@/lyrics/sources';
 import { useLyrics, useLyricsUi } from '@/lyrics/useLyrics';
@@ -334,6 +336,15 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
   const close = useCallback(() => setAnchor(null), []);
   const label = current ? sourceById(current)?.label : 'Lyrics';
 
+  const switchScript = useCallback(
+    (pref: 'both' | 'tamil' | 'english') => {
+      forgetLyrics();
+      setTamilScriptPreference(pref);
+      void queryClient.invalidateQueries({ queryKey: ['lyrics'] });
+    },
+    [setTamilScriptPreference],
+  );
+
   return (
     // In full screen the picker sits quietly above the lines, shown on hover.
     <div
@@ -353,16 +364,41 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
           <ChevronDown size={14} />
         </button>
         {current === 'tamil2lyrics' && (
-          <button
-            className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-            title="Click to cycle Tamil script format (Both / Tamil / Tanglish)"
-            onClick={() => {
-              const next = tamilScriptPreference === 'both' ? 'tamil' : tamilScriptPreference === 'tamil' ? 'english' : 'both';
-              setTamilScriptPreference(next);
-            }}
-          >
-            {tamilScriptPreference === 'both' ? 'Both' : tamilScriptPreference === 'tamil' ? 'தமிழ்' : 'Tanglish'}
-          </button>
+          <div className="inline-flex items-center rounded-full bg-quinary p-0.5 border border-white/10 text-xs shadow-inner">
+            <button
+              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+                tamilScriptPreference === 'both'
+                  ? 'bg-key text-white shadow'
+                  : 'text-secondary hover:text-primary hover:bg-quaternary/40'
+              }`}
+              title="Show both Tamil script and Tanglish transliteration"
+              onClick={() => switchScript('both')}
+            >
+              Both
+            </button>
+            <button
+              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+                tamilScriptPreference === 'tamil'
+                  ? 'bg-key text-white shadow'
+                  : 'text-secondary hover:text-primary hover:bg-quaternary/40'
+              }`}
+              title="Show Tamil script (தமிழ்) only"
+              onClick={() => switchScript('tamil')}
+            >
+              தமிழ்
+            </button>
+            <button
+              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+                tamilScriptPreference === 'english'
+                  ? 'bg-key text-white shadow'
+                  : 'text-secondary hover:text-primary hover:bg-quaternary/40'
+              }`}
+              title="Show English (Tanglish) romanized lyrics only"
+              onClick={() => switchScript('english')}
+            >
+              Tanglish
+            </button>
+          </div>
         )}
       </div>
       {anchor && (
@@ -399,19 +435,19 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
               <MenuHeader>Tamil Script Preference</MenuHeader>
               <MenuItem
                 checked={tamilScriptPreference === 'both'}
-                onSelect={() => (close(), setTamilScriptPreference('both'))}
+                onSelect={() => (close(), switchScript('both'))}
               >
                 Both (Tamil &amp; Tanglish)
               </MenuItem>
               <MenuItem
                 checked={tamilScriptPreference === 'tamil'}
-                onSelect={() => (close(), setTamilScriptPreference('tamil'))}
+                onSelect={() => (close(), switchScript('tamil'))}
               >
                 Tamil Script (தமிழ்)
               </MenuItem>
               <MenuItem
                 checked={tamilScriptPreference === 'english'}
-                onSelect={() => (close(), setTamilScriptPreference('english'))}
+                onSelect={() => (close(), switchScript('english'))}
               >
                 English (Tanglish)
               </MenuItem>
@@ -502,6 +538,7 @@ export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' 
   const picked = useLyricsUi((s) => s.picked[videoId]);
   const ungranted = useUngranted();
   const canvas = useCanvas();
+  const tamilScriptPreference = useLyricsSettings((s) => s.tamilScriptPreference);
   const fontReady = useLyricFont();
   const result = lyrics.data;
   const full = variant === 'full';
@@ -544,7 +581,7 @@ export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' 
           <Loader2 size={20} className="animate-spin" />
         </div>
       ) : result ? (
-        <LyricsView ttml={result.ttml} full={full} />
+        <LyricsView key={`${result.source}-${tamilScriptPreference}-${result.ttml}`} ttml={result.ttml} full={full} />
       ) : picked ? (
         <div className={empty}>
           <p className={emptyTitle}>Not on {sourceById(picked)?.label ?? 'this provider'}</p>
