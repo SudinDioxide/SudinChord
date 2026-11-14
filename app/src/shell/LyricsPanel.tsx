@@ -364,11 +364,11 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
           <ChevronDown size={14} />
         </button>
         {current === 'tamil2lyrics' && (
-          <div className="inline-flex items-center rounded-full bg-quinary p-0.5 border border-white/10 text-xs shadow-inner">
+          <div className="inline-flex items-center rounded-[8px] bg-quinary/80 p-0.5 border border-white/10 text-xs">
             <button
-              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+              className={`px-2.5 py-1 rounded-[6px] transition-all font-semibold text-[11px] select-none ${
                 tamilScriptPreference === 'both'
-                  ? 'bg-key text-white shadow'
+                  ? 'bg-key text-white shadow-sm'
                   : 'text-secondary hover:text-primary hover:bg-quaternary/40'
               }`}
               title="Show both Tamil script and Tanglish transliteration"
@@ -377,9 +377,9 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
               Both
             </button>
             <button
-              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+              className={`px-2.5 py-1 rounded-[6px] transition-all font-semibold text-[11px] select-none ${
                 tamilScriptPreference === 'tamil'
-                  ? 'bg-key text-white shadow'
+                  ? 'bg-key text-white shadow-sm'
                   : 'text-secondary hover:text-primary hover:bg-quaternary/40'
               }`}
               title="Show Tamil script (தமிழ்) only"
@@ -388,9 +388,9 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
               தமிழ்
             </button>
             <button
-              className={`px-2.5 py-0.5 rounded-full transition-all font-semibold text-[11px] select-none ${
+              className={`px-2.5 py-1 rounded-[6px] transition-all font-semibold text-[11px] select-none ${
                 tamilScriptPreference === 'english'
-                  ? 'bg-key text-white shadow'
+                  ? 'bg-key text-white shadow-sm'
                   : 'text-secondary hover:text-primary hover:bg-quaternary/40'
               }`}
               title="Show English (Tanglish) romanized lyrics only"
