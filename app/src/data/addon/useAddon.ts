@@ -10,6 +10,7 @@ export function useAddons(): MultiAddonState & {
   moveAddon: (index: number, direction: 'up' | 'down') => void;
   setLosslessEnabled: (enabled: boolean) => void;
   installAllCommunityAddons: () => Promise<number>;
+  benchmarkAddons: () => Promise<void>;
 } {
   const [state, setState] = useState<MultiAddonState>(addonStore.getState());
 
@@ -25,6 +26,7 @@ export function useAddons(): MultiAddonState & {
     moveAddon: (index: number, direction: 'up' | 'down') => addonStore.moveAddon(index, direction),
     setLosslessEnabled: (enabled: boolean) => addonStore.setLosslessEnabled(enabled),
     installAllCommunityAddons: () => addonStore.installAllCommunityAddons(),
+    benchmarkAddons: () => addonStore.benchmarkAddons(),
   };
 }
 

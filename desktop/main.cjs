@@ -908,6 +908,10 @@ function createWindow() {
         : path.join(__dirname, '../app/public/favicon.ico'),
   });
 
+  mainWindow.once('ready-to-show', () => {
+    updateTaskbarThumbnailToolbar({ playing: false });
+  });
+
   const devUrl = `http://localhost:${PORT}`;
   mainWindow.loadURL(devUrl).catch((err) => {
     console.error('[Desktop] Failed to load URL:', err);
@@ -1136,7 +1140,12 @@ let currentMediaState = null;
 function getThumbarIcon(name) {
   const p = path.join(__dirname, 'assets', `${name}.png`);
   if (fs.existsSync(p)) {
-    return nativeImage.createFromPath(p);
+    try {
+      const buf = fs.readFileSync(p);
+      return nativeImage.createFromBuffer(buf);
+    } catch {
+      return nativeImage.createFromPath(p);
+    }
   }
   return nativeImage.createEmpty();
 }
@@ -1213,27 +1222,27 @@ function updateTrayMenu() {
       : 'SudinChord';
 
     const contextMenu = Menu.buildFromTemplate([
-      { label: title.length > 36 ? `${title.slice(0, 33)}...` : title, enabled: false },
+      { label: `🎵 ${title.length > 34 ? `${title.slice(0, 31)}...` : title}`, enabled: false },
       { type: 'separator' },
       {
-        label: isPlaying ? 'Pause (Ctrl+Alt+Space)' : 'Play (Ctrl+Alt+Space)',
+        label: isPlaying ? '⏸  Pause (Ctrl+Alt+Space)' : '▶  Play (Ctrl+Alt+Space)',
         click: () => mainWindow?.webContents.send('media:command', isPlaying ? 'pause' : 'play'),
       },
       {
-        label: 'Next Track (Ctrl+Alt+Right)',
+        label: '⏭  Next Track (Ctrl+Alt+Right)',
         click: () => mainWindow?.webContents.send('media:command', 'next'),
       },
       {
-        label: 'Previous Track (Ctrl+Alt+Left)',
+        label: '⏮  Previous Track (Ctrl+Alt+Left)',
         click: () => mainWindow?.webContents.send('media:command', 'previous'),
       },
       { type: 'separator' },
       {
-        label: 'Mini-Player (Ctrl+Alt+M)',
+        label: '🪟  Mini-Player (Ctrl+Alt+M)',
         click: () => toggleMiniPlayer(),
       },
       {
-        label: 'Open SudinChord',
+        label: '🎛  Open SudinChord',
         click: () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();

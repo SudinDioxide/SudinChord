@@ -93,6 +93,8 @@ export interface InstalledAddon {
   status: 'connected' | 'error' | 'validating';
   errorMessage?: string | null;
   createdAt: number;
+  latencyMs?: number | null;
+  lastChecked?: number | null;
 }
 
 export interface MultiAddonState {
@@ -163,10 +165,8 @@ class AddonStore {
         }
       }
 
-      // Re-verify manifest for each installed addon in background
-      for (const addon of this.state.addons) {
-        void this.verifyAddon(addon.id, addon.url);
-      }
+      // Re-verify manifest and benchmark response times in background
+      void this.benchmarkAddons();
     } catch {
       // Ignore storage errors
     }
@@ -268,6 +268,47 @@ class AddonStore {
     if (!moved) return;
     list.splice(targetIndex, 0, moved);
 
+    this.state = { ...this.state, addons: list };
+    this.notify();
+  }
+
+  async benchmarkAddons(): Promise<void> {
+    const list = [...this.state.addons];
+    const tasks = list.map(async (addon) => {
+      if (!addon.enabled) return;
+      const start = performance.now();
+      try {
+        const manifestUrl = `${addon.url}/manifest.json`;
+        const res = await fetch(manifestUrl, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'BitChord/1.9.1 (Linux; Android 14; com.music.bitchord)',
+          },
+          signal: AbortSignal.timeout(4000),
+        });
+        const elapsed = Math.round(performance.now() - start);
+        if (res.ok) {
+          const manifest = (await res.json()) as AddonManifest;
+          addon.status = 'connected';
+          addon.errorMessage = null;
+          addon.latencyMs = elapsed;
+          addon.lastChecked = Date.now();
+          if (manifest.name) addon.name = manifest.name;
+        } else {
+          addon.status = 'error';
+          addon.errorMessage = `HTTP ${res.status}`;
+          addon.latencyMs = null;
+          addon.lastChecked = Date.now();
+        }
+      } catch (err) {
+        addon.status = 'error';
+        addon.errorMessage = err instanceof Error ? err.message : 'Timeout / Offline';
+        addon.latencyMs = null;
+        addon.lastChecked = Date.now();
+      }
+    });
+
+    await Promise.allSettled(tasks);
     this.state = { ...this.state, addons: list };
     this.notify();
   }

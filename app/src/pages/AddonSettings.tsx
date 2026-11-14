@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronDown, ChevronUp, DownloadCloud, Globe, Link, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, DownloadCloud, Globe, Link, Plus, Sparkles, Trash2, Zap } from 'lucide-react';
 import { useAddons, COMMUNITY_ADDONS, type CommunityAddonPreset } from '@/data/addon/useAddon';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
@@ -14,12 +14,23 @@ export function AddonSettings() {
     moveAddon,
     setLosslessEnabled,
     installAllCommunityAddons,
+    benchmarkAddons,
   } = useAddons();
 
   const [inputUrl, setInputUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
+
+  const handleBenchmark = async () => {
+    setIsBenchmarking(true);
+    try {
+      await benchmarkAddons();
+    } finally {
+      setIsBenchmarking(false);
+    }
+  };
 
   const handleAdd = async (urlToAdd?: string) => {
     const target = urlToAdd !== undefined ? urlToAdd : inputUrl;
@@ -113,8 +124,19 @@ export function AddonSettings() {
         {addons.length > 0 ? (
           <div className="divide-y divide-white/5 border-t border-white/5">
             <div className="px-4 py-2 bg-white/[0.02] flex items-center justify-between text-xs text-secondary font-semibold">
-              <span>Active Addons (Priority Order)</span>
-              <span>{addons.filter((a) => a.enabled).length} of {addons.length} enabled</span>
+              <span>Active Addons (Ranked by Speed &amp; Priority)</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBenchmark}
+                  disabled={isBenchmarking}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-primary text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-50"
+                  title="Ping all addons to benchmark response latency"
+                >
+                  <Zap size={12} className={isBenchmarking ? 'animate-bounce text-amber-400 fill-amber-400' : 'text-amber-400 fill-amber-400'} />
+                  <span>{isBenchmarking ? 'Testing...' : 'Benchmark Speed'}</span>
+                </button>
+                <span>{addons.filter((a) => a.enabled).length} of {addons.length} enabled</span>
+              </div>
             </div>
             {addons.map((addon, index) => (
               <div key={addon.id} className="flex items-center gap-3 p-4 hover:bg-quaternary/20 transition-colors">
@@ -151,6 +173,21 @@ export function AddonSettings() {
                       }`}
                     />
                     <span className="font-semibold text-primary truncate">{addon.name}</span>
+                    {addon.latencyMs != null && (
+                      <span
+                        className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border select-none ${
+                          addon.latencyMs < 120
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : addon.latencyMs < 300
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-red-500/15 text-red-300 border-red-500/30'
+                        }`}
+                        title={`Response latency: ${addon.latencyMs}ms`}
+                      >
+                        <Zap size={9} className="fill-current" />
+                        {addon.latencyMs}ms
+                      </span>
+                    )}
                     {addon.version && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-secondary flex-none">
                         v{addon.version}

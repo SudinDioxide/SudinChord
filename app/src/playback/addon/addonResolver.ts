@@ -311,6 +311,13 @@ export async function resolveLosslessTrack({
   const activeAddons = state.addons.filter((a) => a.enabled && a.status === 'connected');
   if (activeAddons.length === 0) return null;
 
+  // Auto-failover & latency ranking: sort addons by ping latency ascending (fastest first)
+  activeAddons.sort((a, b) => {
+    const latA = typeof a.latencyMs === 'number' ? a.latencyMs : 9999;
+    const latB = typeof b.latencyMs === 'number' ? b.latencyMs : 9999;
+    return latA - latB;
+  });
+
   const resolutionPromise = (async () => {
     try {
       const queryPromises = activeAddons.map((addon) =>
