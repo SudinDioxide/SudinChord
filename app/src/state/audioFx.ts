@@ -6,218 +6,17 @@ export interface EqPreset {
   id: string;
   name: string;
   gains: number[];
-  category?: 'genre' | 'headphone';
-  brand?: string;
-  description?: string;
 }
 
 export const EQ_PRESETS: EqPreset[] = [
-  { id: 'flat', name: 'Flat', gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], category: 'genre' },
-  { id: 'bass-boost', name: 'Bass Boost', gains: [6, 5, 4, 2, 0, 0, 0, 0, 1, 1], category: 'genre' },
-  { id: 'treble-boost', name: 'Treble Boost', gains: [0, 0, 0, 0, 1, 2, 3, 5, 6, 7], category: 'genre' },
-  { id: 'vocal', name: 'Vocal Booster', gains: [-2, -1, 0, 2, 4, 4, 3, 1, 0, -1], category: 'genre' },
-  { id: 'electronic', name: 'Electronic', gains: [4, 3, 1, 0, -1, 1, 2, 3, 4, 4], category: 'genre' },
-  { id: 'rock', name: 'Rock', gains: [4, 3, 1, -1, -2, 0, 2, 3, 4, 5], category: 'genre' },
-  { id: 'acoustic', name: 'Acoustic', gains: [3, 2, 1, 1, 2, 2, 3, 3, 2, 2], category: 'genre' },
+  { id: 'flat', name: 'Flat', gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: 'bass-boost', name: 'Bass Boost', gains: [6, 5, 4, 2, 0, 0, 0, 0, 1, 1] },
+  { id: 'treble-boost', name: 'Treble Boost', gains: [0, 0, 0, 0, 1, 2, 3, 5, 6, 7] },
+  { id: 'vocal', name: 'Vocal Booster', gains: [-2, -1, 0, 2, 4, 4, 3, 1, 0, -1] },
+  { id: 'electronic', name: 'Electronic', gains: [4, 3, 1, 0, -1, 1, 2, 3, 4, 4] },
+  { id: 'rock', name: 'Rock', gains: [4, 3, 1, -1, -2, 0, 2, 3, 4, 5] },
+  { id: 'acoustic', name: 'Acoustic', gains: [3, 2, 1, 1, 2, 2, 3, 3, 2, 2] },
 ];
-
-export const AUTOEQ_PROFILES: EqPreset[] = [
-  // Apple
-  {
-    id: 'autoeq-airpods-pro-2',
-    name: 'AirPods Pro 2',
-    brand: 'Apple',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Tightens bass and smooths upper midrange',
-    gains: [-1, 0, 0, 1, 0, -1, 2, 4, 1, -2],
-  },
-  {
-    id: 'autoeq-airpods-pro',
-    name: 'AirPods Pro',
-    brand: 'Apple',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Compensates 4kHz-8kHz presence region',
-    gains: [-1, 0, 0, 1, 1, 0, 2, 5, 0, -3],
-  },
-  {
-    id: 'autoeq-airpods-max',
-    name: 'AirPods Max',
-    brand: 'Apple',
-    category: 'headphone',
-    description: 'Harman Over-Ear Target: Cleans upper bass bloat and elevates clarity',
-    gains: [0, -1, -2, -1, 0, 1, 2, 3, -1, -2],
-  },
-  {
-    id: 'autoeq-airpods-3',
-    name: 'AirPods 3',
-    brand: 'Apple',
-    category: 'headphone',
-    description: 'Harman Target: Compensates open-ear bass rolloff',
-    gains: [4, 3, 1, 0, -1, 1, 2, 1, 0, -1],
-  },
-  // Sony
-  {
-    id: 'autoeq-sony-wh1000xm4',
-    name: 'WH-1000XM4',
-    brand: 'Sony',
-    category: 'headphone',
-    description: 'Harman Target: Controls boomy mid-bass and lifts recessed treble detail',
-    gains: [-4, -3, -2, -1, 1, 2, 2, 3, -1, -2],
-  },
-  {
-    id: 'autoeq-sony-wh1000xm5',
-    name: 'WH-1000XM5',
-    brand: 'Sony',
-    category: 'headphone',
-    description: 'Harman Target: Neutralizes dark warmth for clearer instruments',
-    gains: [-2, -2, -1, 0, 1, 1, 3, 2, 0, -1],
-  },
-  {
-    id: 'autoeq-sony-wf1000xm4',
-    name: 'WF-1000XM4 (In-Ear)',
-    brand: 'Sony',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Clarifies 1kHz-4kHz and sparkles top octave',
-    gains: [-1, -2, -1, 0, 1, 2, 2, 1, 3, 1],
-  },
-  {
-    id: 'autoeq-sony-wf1000xm5',
-    name: 'WF-1000XM5 (In-Ear)',
-    brand: 'Sony',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Balanced reference tuning',
-    gains: [-1, -1, 0, 0, 1, 1, 2, 2, 1, -1],
-  },
-  // Sennheiser
-  {
-    id: 'autoeq-sennheiser-hd600',
-    name: 'HD 600',
-    brand: 'Sennheiser',
-    category: 'headphone',
-    description: 'Harman Target: Extends sub-bass rolloff and refines 3kHz forwardness',
-    gains: [6, 4, 2, 0, 0, 0, -1, 2, -1, -3],
-  },
-  {
-    id: 'autoeq-sennheiser-hd650',
-    name: 'HD 650 / HD 6XX',
-    brand: 'Sennheiser',
-    category: 'headphone',
-    description: 'Harman Target: Lifts sub-bass and adds air to the top end',
-    gains: [6, 5, 2, 0, 0, 0, 0, 2, 1, -2],
-  },
-  {
-    id: 'autoeq-sennheiser-hd560s',
-    name: 'HD 560S',
-    brand: 'Sennheiser',
-    category: 'headphone',
-    description: 'Harman Target: Adds sub-bass slam and smooths 4kHz-6kHz peak',
-    gains: [4, 2, 1, 0, -1, 0, 1, -1, 2, 0],
-  },
-  {
-    id: 'autoeq-sennheiser-momentum-4',
-    name: 'Momentum 4',
-    brand: 'Sennheiser',
-    category: 'headphone',
-    description: 'Harman Target: Tames bass emphasis and brightens mids',
-    gains: [-3, -2, -1, 0, 1, 1, 2, 2, -1, -1],
-  },
-  // Samsung
-  {
-    id: 'autoeq-samsung-buds-2-pro',
-    name: 'Galaxy Buds 2 Pro',
-    brand: 'Samsung',
-    category: 'headphone',
-    description: 'Harman Target: Fine-tunes high treble and mid-bass balance',
-    gains: [0, 1, 0, 0, 0, 0, 1, 2, -1, -1],
-  },
-  {
-    id: 'autoeq-samsung-buds-pro',
-    name: 'Galaxy Buds Pro',
-    brand: 'Samsung',
-    category: 'headphone',
-    description: 'Harman Target: Smooths vocal bite and extends sub-bass',
-    gains: [1, 0, 0, -1, 0, 1, 2, 1, 0, -1],
-  },
-  // Bose
-  {
-    id: 'autoeq-bose-qc45',
-    name: 'QuietComfort 45 / QC35 II',
-    brand: 'Bose',
-    category: 'headphone',
-    description: 'Harman Target: Neutralizes sharp 6kHz treble spike and warms mids',
-    gains: [1, -1, -1, 0, 1, 2, 0, -3, 1, 0],
-  },
-  {
-    id: 'autoeq-bose-qc-ultra',
-    name: 'QuietComfort Ultra',
-    brand: 'Bose',
-    category: 'headphone',
-    description: 'Harman Target: Refines upper treble detail and reduces lower bass',
-    gains: [-1, -2, -1, 0, 1, 1, 1, 0, 2, 1],
-  },
-  // Beyerdynamic
-  {
-    id: 'autoeq-beyerdynamic-dt770',
-    name: 'DT 770 Pro (80Ω)',
-    brand: 'Beyerdynamic',
-    category: 'headphone',
-    description: 'Harman Target: Tames the sharp 6kHz-8kHz Beyer treble spike',
-    gains: [1, 0, -1, 0, 1, 0, 0, -4, 2, -3],
-  },
-  {
-    id: 'autoeq-beyerdynamic-dt990',
-    name: 'DT 990 Pro',
-    brand: 'Beyerdynamic',
-    category: 'headphone',
-    description: 'Harman Target: Calibrates aggressive V-shape into natural reference',
-    gains: [4, 2, 0, 0, 1, 0, -1, -5, 0, -4],
-  },
-  // Audio-Technica
-  {
-    id: 'autoeq-ath-m50x',
-    name: 'ATH-M50x',
-    brand: 'Audio-Technica',
-    category: 'headphone',
-    description: 'Harman Target: Cleans up boxy mid-bass and extends high frequencies',
-    gains: [-2, -1, 0, 0, 0, 1, -1, 1, -2, 1],
-  },
-  // Moondrop & Popular IEMs
-  {
-    id: 'autoeq-moondrop-chu-2',
-    name: 'Chu / Chu II',
-    brand: 'Moondrop',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Enhances sub-bass depth and relaxes upper mids',
-    gains: [1, 0, 0, 0, 0, -1, 1, 3, -2, 2],
-  },
-  {
-    id: 'autoeq-moondrop-aria',
-    name: 'Aria',
-    brand: 'Moondrop',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Lifts vocal presence and clarifies soundstage',
-    gains: [0, 0, 0, 0, 1, 1, 2, 1, -1, 1],
-  },
-  {
-    id: 'autoeq-7hz-zero',
-    name: 'Salnotes Zero',
-    brand: '7Hz',
-    category: 'headphone',
-    description: 'Harman In-Ear Target: Adds low-end punch to lean bass',
-    gains: [2, 1, 0, 0, 0, 0, 1, 2, 1, -1],
-  },
-  // Hifiman Planar
-  {
-    id: 'autoeq-hifiman-sundara',
-    name: 'Sundara (Planar)',
-    brand: 'Hifiman',
-    category: 'headphone',
-    description: 'Harman Target: Imparts sub-bass slam to ultra-fast planar drivers',
-    gains: [5, 3, 1, 0, 0, 0, 0, 1, 2, 0],
-  },
-];
-
-export const ALL_PRESETS: EqPreset[] = [...EQ_PRESETS, ...AUTOEQ_PROFILES];
 
 const STORAGE_KEY = 'sudinchord:audio-fx:v1';
 
@@ -288,7 +87,7 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
   },
 
   setPreset(presetId) {
-    const p = ALL_PRESETS.find((x) => x.id === presetId);
+    const p = EQ_PRESETS.find((x) => x.id === presetId);
     if (!p) return;
     set({ preset: p.id, bands: [...p.gains], eqEnabled: true });
     persist(get());

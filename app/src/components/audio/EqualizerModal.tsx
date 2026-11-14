@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { useAudioFx, EQ_FREQUENCIES, EQ_PRESETS, AUTOEQ_PROFILES, ALL_PRESETS } from '@/state/audioFx';
-import { X, Sliders, Volume2, RotateCcw, ChevronDown, Check, Headphones, Music, Search } from 'lucide-react';
+import { useAudioFx, EQ_FREQUENCIES, EQ_PRESETS } from '@/state/audioFx';
+import { X, Sliders, Volume2, RotateCcw, ChevronDown, Check } from 'lucide-react';
 
 function AppleToggle({
   checked,
@@ -77,17 +77,12 @@ export function EqualizerModal() {
   } = useAudioFx();
 
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
-  const [presetTab, setPresetTab] = useState<'genre' | 'headphone'>('genre');
-  const [eqSearch, setEqSearch] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('All');
   const activeFaderRef = useRef<number | null>(null);
 
   if (!modalOpen) return null;
 
-  const currentPreset = ALL_PRESETS.find((p) => p.id === preset);
-  const isHeadphonePreset = currentPreset?.category === 'headphone';
   const currentPresetName =
-    currentPreset?.name ?? (preset === 'custom' ? 'Custom' : 'Flat');
+    EQ_PRESETS.find((p) => p.id === preset)?.name ?? (preset === 'custom' ? 'Custom' : 'Flat');
 
   // Interactive fader pointer dragging
   const handleFaderStart = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
@@ -185,9 +180,8 @@ export function EqualizerModal() {
               }}
               className="h-8 px-3 rounded-[12px] bg-white/[0.07] border border-white/10 hover:bg-white/[0.12] text-white text-xs font-medium flex items-center gap-2 transition-all shadow-sm cursor-pointer"
             >
-              {isHeadphonePreset ? <Headphones size={13} className="text-emerald-400" /> : <Sliders size={13} className="text-white/60" />}
-              <span className="text-white/50">{isHeadphonePreset ? 'AutoEq:' : 'Preset:'}</span>
-              <span className="font-semibold text-white max-w-[130px] truncate">{currentPresetName}</span>
+              <span className="text-white/50">Preset:</span>
+              <span className="font-semibold text-white">{currentPresetName}</span>
               <ChevronDown size={14} className="text-white/60" />
             </button>
 
@@ -198,141 +192,30 @@ export function EqualizerModal() {
                   onClick={() => setPresetMenuOpen(false)}
                 />
                 <div
-                  className="absolute left-0 top-10 z-50 w-80 rounded-2xl border border-white/10 bg-[#161922]/98 p-2.5 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150"
+                  className="absolute left-0 top-10 z-50 w-44 rounded-2xl border border-white/10 bg-[#161922]/98 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Category Tabs */}
-                  <div className="flex rounded-xl bg-white/[0.06] p-0.5 mb-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setPresetTab('genre')}
-                      className={`flex-1 py-1 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                        presetTab === 'genre'
-                          ? 'bg-white/15 text-white shadow-sm'
-                          : 'text-white/60 hover:text-white'
-                      }`}
-                    >
-                      <Music size={12} />
-                      <span>Genre</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPresetTab('headphone')}
-                      className={`flex-1 py-1 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                        presetTab === 'headphone'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
-                          : 'text-white/60 hover:text-white'
-                      }`}
-                    >
-                      <Headphones size={12} />
-                      <span>AutoEq Headphones</span>
-                    </button>
-                  </div>
-
-                  {/* Genre Presets */}
-                  {presetTab === 'genre' && (
-                    <div className="space-y-1">
-                      {EQ_PRESETS.map((p) => {
-                        const isSelected = preset === p.id;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => {
-                              setPreset(p.id);
-                              setPresetMenuOpen(false);
-                            }}
-                            className={`w-full h-8 px-2.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-white/15 text-white font-medium'
-                                : 'text-white/70 hover:bg-white/10 hover:text-white'
-                            }`}
-                          >
-                            <span>{p.name}</span>
-                            {isSelected && <Check size={14} className="text-white" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* AutoEq Headphone Profiles */}
-                  {presetTab === 'headphone' && (
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <Search size={12} className="absolute left-2.5 top-2 text-white/40" />
-                        <input
-                          type="text"
-                          value={eqSearch}
-                          onChange={(e) => setEqSearch(e.target.value)}
-                          placeholder="Search Sony, AirPods, HD 600..."
-                          className="w-full h-7 bg-white/[0.06] border border-white/10 rounded-lg pl-7 pr-2 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-
-                      {/* Brand Pills */}
-                      <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar text-[10px]">
-                        {['All', 'Apple', 'Sony', 'Sennheiser', 'Samsung', 'Bose', 'Beyerdynamic', 'Moondrop'].map((b) => (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => setSelectedBrand(b)}
-                            className={`px-2 py-0.5 rounded-md font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                              selectedBrand === b
-                                ? 'bg-emerald-500/30 text-emerald-300 font-bold'
-                                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
-                            }`}
-                          >
-                            {b}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Headphone list */}
-                      <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
-                        {AUTOEQ_PROFILES.filter((p) => {
-                          const matchesBrand = selectedBrand === 'All' || p.brand?.toLowerCase() === selectedBrand.toLowerCase();
-                          const matchesSearch =
-                            !eqSearch.trim() ||
-                            p.name.toLowerCase().includes(eqSearch.toLowerCase()) ||
-                            p.brand?.toLowerCase().includes(eqSearch.toLowerCase());
-                          return matchesBrand && matchesSearch;
-                        }).map((p) => {
-                          const isSelected = preset === p.id;
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setPreset(p.id);
-                                setPresetMenuOpen(false);
-                              }}
-                              className={`w-full p-2 rounded-xl text-left transition-colors flex items-center justify-between gap-2 cursor-pointer ${
-                                isSelected
-                                  ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-200'
-                                  : 'hover:bg-white/10 text-white/80'
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-semibold truncate flex items-center gap-1.5">
-                                  <span>{p.name}</span>
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-white/10 text-white/60 font-normal">
-                                    {p.brand}
-                                  </span>
-                                </div>
-                                {p.description && (
-                                  <div className="text-[10px] text-white/45 truncate mt-0.5">
-                                    {p.description}
-                                  </div>
-                                )}
-                              </div>
-                              {isSelected && <Check size={14} className="text-emerald-400 flex-none" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  {EQ_PRESETS.map((p) => {
+                    const isSelected = preset === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setPreset(p.id);
+                          setPresetMenuOpen(false);
+                        }}
+                        className={`w-full h-8 px-2.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-white/15 text-white font-medium'
+                            : 'text-white/70 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <span>{p.name}</span>
+                        {isSelected && <Check size={14} className="text-white" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             )}
