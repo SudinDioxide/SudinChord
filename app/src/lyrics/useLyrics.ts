@@ -46,9 +46,10 @@ export function useLyrics() {
   const only = useLyricsUi((s) => (videoId ? s.picked[videoId] : undefined));
   const order = useLyricsSettings((s) => s.order.filter((id) => !s.disabled.includes(id)).join(','));
   const preferSyllables = useLyricsSettings((s) => s.preferSyllables);
+  const tamilScriptPreference = useLyricsSettings((s) => s.tamilScriptPreference);
 
   return useQuery<LyricsResult | null>({
-    queryKey: ['lyrics', videoId, title, artist, only ?? null, order, preferSyllables],
+    queryKey: ['lyrics', videoId, title, artist, only ?? null, order, preferSyllables, tamilScriptPreference],
     enabled: !!videoId && !!title,
     staleTime: Infinity,
     gcTime: 30 * 60_000,

@@ -839,9 +839,19 @@ export async function tamil2lyrics(
   q: LyricsQuery,
   scriptPreference: 'both' | 'tamil' | 'english' = 'both',
 ): Promise<Parsed | null> {
-  const cleanTitle = q.title
+  // 1. Strip packaging: (From "Think Indie"), (feat. ...), [From "..."], (Audio), etc.
+  const bareTitle = q.title
+    .replace(/\s*[([]\s*from\b[^)\]]*[)\]]/gi, ' ')
     .replace(/\s*[([]\s*(feat|ft|featuring|with)\b[^)\]]*[)\]]/gi, ' ')
     .replace(/\s*[([]\s*(official\s*)?(music\s*)?(video|audio|visuali[sz]er|lyrics?\s*video|lyrics?|m\/?v|hd|hq|4k|full\s*song)\s*[)\]]/gi, ' ')
+    .replace(/\s*[([].*?[)\]]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // 2. Extract primary artist (before commas, &, feat, /)
+  const primaryArtist = q.artist
+    .split(/[,&/]| - Topic|\bfeat\b|\bft\b/i)[0]!
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -853,9 +863,12 @@ export async function tamil2lyrics(
     .trim();
 
   const attempts = [
-    cleanArtist ? `${cleanTitle} ${cleanArtist}`.trim() : cleanTitle,
-    cleanTitle,
+    primaryArtist ? `${bareTitle} ${primaryArtist}`.trim() : '',
+    cleanArtist && cleanArtist !== primaryArtist ? `${bareTitle} ${cleanArtist}`.trim() : '',
+    bareTitle,
   ].filter(Boolean);
+
+  const titleTokens = bareTitle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
 
   for (const query of attempts) {
     const searchUrl = `https://www.tamil2lyrics.com/?s=${encodeURIComponent(query)}`;
@@ -863,15 +876,36 @@ export async function tamil2lyrics(
     if (!searchHtml) continue;
 
     const linkMatches = [...searchHtml.matchAll(/href="(https:\/\/www\.tamil2lyrics\.com\/lyrics\/[^"]+)"/gi)];
-    const songUrl = linkMatches[0]?.[1];
-    if (!songUrl) continue;
+    if (!linkMatches.length) continue;
 
-    const songHtml = await lyricsGet(songUrl, { route: 'extension' });
-    if (!songHtml) continue;
+    // Score candidates by matching title tokens in URL slug
+    const uniqueUrls = [...new Set(linkMatches.map((m) => m[1]).filter((u): u is string => Boolean(u)))];
+    const scored = uniqueUrls
+      .map((url) => {
+        const slug = url.toLowerCase().split('/lyrics/')[1] || '';
+        let score = 0;
+        if (titleTokens.length > 0 && slug.includes(titleTokens.join('-'))) {
+          score += 100;
+        }
+        for (const token of titleTokens) {
+          if (slug.includes(token)) score += 20;
+        }
+        return { url, score };
+      })
+      .sort((a, b) => b.score - a.score);
 
-    const lines = parseTamil2LyricsHtml(songHtml, scriptPreference);
-    if (lines.length) {
-      return { lines, ttml: null };
+    // Try candidates with positive score first, falling back to top returned link
+    const candidateUrls = scored.filter((s) => s.score > 0).map((s) => s.url);
+    if (!candidateUrls.length && uniqueUrls.length) candidateUrls.push(uniqueUrls[0]!);
+
+    for (const songUrl of candidateUrls.slice(0, 3)) {
+      const songHtml = await lyricsGet(songUrl, { route: 'extension' });
+      if (!songHtml) continue;
+
+      const lines = parseTamil2LyricsHtml(songHtml, scriptPreference);
+      if (lines.length) {
+        return { lines, ttml: null };
+      }
     }
   }
 
