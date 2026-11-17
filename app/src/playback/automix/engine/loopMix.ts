@@ -62,7 +62,7 @@ export const OUT_REGION_SEC = OUT_SEARCH_SEC + 5;
 export const IN_REGION_SEC = IN_SEARCH_SEC + 40;
 /** Element <-> deck handovers: identical audio crossed this quickly is heard as one. */
 const HANDOVER_SEC = 0.025;
-const BASS_CUT_DB = -18;
+const BASS_CUT_DB = -24;
 
 /** Where a song is sung, in its own seconds, from its synced lyrics. */
 export type SungSpans = [number, number][];
@@ -406,6 +406,12 @@ export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: Lo
   inDeck.eq.setGainAt('low', BASS_CUT_DB, t0);
   outDeck.eq.rampGain('low', 0, BASS_CUT_DB, mid - bar / 2, bar);
   inDeck.eq.rampGain('low', BASS_CUT_DB, 0, mid - bar / 2, bar);
+
+  // mid carving: duck outgoing loop's mids as incoming loop enters to prevent vocal/harmonic clashes
+  outDeck.eq.rampGain('mid', 0, -5, enterEnd, rampEnd - enterEnd);
+  inDeck.eq.setGainAt('mid', -2, t0);
+  inDeck.eq.rampGain('mid', -2, 0, enterEnd, rampEnd - enterEnd);
+
   // the outgoing loop drains away through a rising high-pass once the tempo has arrived
   const hp = outDeck.sweep.highpass.frequency;
   hp.setValueAtTime(20, rampEnd);

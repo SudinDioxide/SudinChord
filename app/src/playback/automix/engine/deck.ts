@@ -30,15 +30,15 @@ type Change = { output: number; input: number; rate: number; active: boolean };
 
 /** Off by more than this, a seek; below it, a rate nudge. */
 const SEEK_ERROR_SEC = 0.25;
-/** Inside this, the element is on the beat (a 16th at 128 BPM is 117 ms). */
-const DEADBAND_SEC = 0.006;
-/** Largest rate nudge: 3% is below what a listener hears with pitch preserved. */
-const MAX_NUDGE = 0.03;
-/** Largest rate nudge while the deck's gain is under 0.3. */
-const MAX_QUIET_NUDGE = 0.1;
+/** Inside this, the element is on the beat (tightened to 4ms for sub-perceptual phase sync). */
+const DEADBAND_SEC = 0.004;
+/** Largest rate nudge: 3.5% is below pitch-perceptible threshold with preservesPitch. */
+const MAX_NUDGE = 0.035;
+/** Largest rate nudge while the deck's gain is under 0.3 (pulls phase tight fast on entry). */
+const MAX_QUIET_NUDGE = 0.15;
 /** Seconds of error corrected per second of playback. */
-const SERVO_GAIN = 0.8;
-const SERVO_MS = 40;
+const SERVO_GAIN = 1.2;
+const SERVO_MS = 30;
 
 /**
  * One DJ deck: <audio> -> 3-band EQ -> gain (AutoMix's automation) -> fader

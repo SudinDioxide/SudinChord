@@ -77,3 +77,17 @@ export function camelotScore(from: CamelotKey, to: CamelotKey): number {
   }
   return dist(from.num, to.num) === 0 ? 2.5 : 0;
 }
+
+export type HarmonicRelation = 'exact' | 'relative' | 'adjacent' | 'energy_boost' | 'incompatible';
+
+/** Describes harmonic relationship for display and mixing decisions. */
+export function harmonicRelation(from: CamelotKey, to: CamelotKey): HarmonicRelation {
+  if (from.letter === to.letter && from.num === to.num) return 'exact';
+  if (from.letter !== to.letter && from.num === to.num) return 'relative';
+  if (from.letter === to.letter) {
+    const diff = (to.num - from.num + 12) % 12;
+    if (diff === 1 || diff === 11) return 'adjacent';
+    if (diff === 2) return 'energy_boost';
+  }
+  return 'incompatible';
+}

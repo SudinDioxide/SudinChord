@@ -45,26 +45,37 @@ export interface TransitionPlan {
 // 0.2-0.45 grids now beatmatch but only for the short 4-bar tier, so a
 // wrong lock costs ~11s, not a 46s blend.
 export const MIN_GRID_CONFIDENCE = 0.2;
-// Bass swap depth: full on long blends with room for it; gentle on short
-// blends so piano-led lows aren't gutted but the cross is still audible.
-const KILL_DB = -12;
-const SHORT_BLEND_KILL_DB = -6;
+// Bass swap depth: true club isolator kill (-24 dB) on standard transitions so kicks and
+// sub-bass never destructively cancel out; -18 dB on short blends.
+const ISOLATOR_KILL_DB = -24;
+const SHORT_BLEND_KILL_DB = -18;
 const FULL_SWAP_MIN_BARS = 8;
+const MID_CARVE_DB = -6;
 
 /**
- * Confidence-scaled blend length: the UI's bar count is a MAX, not a command.
- * Long overlaps are a house/techno assumption — two melodic tracks over a
- * shaky grid for 46s is mush, so weaker grids get shorter blends.
+ * Confidence-scaled and energy-aware blend length (inspired by Sonetra AI Mixer):
+ * - Confidence scales the requested bars down when grids are loose.
+ * - High-energy tracks (> 0.75) are kept crisp and punchy (up to 8 bars)
+ *   so driving drums and kicks do not muddy across a 16-bar overlap.
  */
 export function effectiveBlendBars(
   requestedBars: number,
   fromConfidence: number,
   toConfidence: number,
+  fromEnergy?: number,
+  toEnergy?: number,
 ): number {
   const conf = Math.min(fromConfidence, toConfidence);
-  if (conf >= 0.6) return requestedBars;
-  if (conf >= 0.45) return Math.min(requestedBars, 8);
-  return Math.min(requestedBars, 4);
+  let bars = requestedBars;
+  if (conf < 0.45) bars = Math.min(requestedBars, 4);
+  else if (conf < 0.6) bars = Math.min(requestedBars, 8);
+
+  if (fromEnergy !== undefined && toEnergy !== undefined) {
+    if (fromEnergy > 0.75 && toEnergy > 0.75) {
+      bars = Math.min(bars, 8);
+    }
+  }
+  return bars;
 }
 
 /**
@@ -113,7 +124,7 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
     return scheduleFilterMix(req, earliest, fromGrid, toGrid, `tempos ${Math.round(Math.abs(rate - 1) * 100)}% apart`);
   }
   // blend length measured in output seconds at the outgoing tempo
-  const effBars = effectiveBlendBars(bars, fromAnalysis.gridConfidence, toAnalysis.gridConfidence);
+  const effBars = effectiveBlendBars(bars, fromAnalysis.gridConfidence, toAnalysis.gridConfidence, fromAnalysis.energy, toAnalysis.energy);
   const durationSec = effBars * BEATS_PER_BAR * (60 / effectiveFromBpm);
 
   // --- outgoing mix-out point (track time) ---
@@ -154,16 +165,30 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
   // --- gains: equal-power cross ---
   applyEqualPowerCross(from.gain.gain, to.gain.gain, t0, durationSec);
 
-  // --- EQ: bass swap at midpoint over 1 bar, highs cross the whole window ---
-  const swapDb = effBars >= FULL_SWAP_MIN_BARS ? KILL_DB : SHORT_BLEND_KILL_DB;
+  // --- EQ (Sonetra-style 3-band isolation):
+  // 1) Bass Isolator: Incoming bass is silenced (-24 dB) during entry,
+  //    then cleanly swaps on the phrase midpoint downbeat over half a bar to eliminate phase cancellation.
+  // 2) Mid Carving: Outgoing mid (vocals & lead instruments, 300Hz-3kHz) ducks by -6 dB to prevent vocal collisions.
+  // 3) High Crossover: Smooth high-shelf crossover prevents cymbal/hi-hat comb-filtering.
+  const swapDb = effBars >= FULL_SWAP_MIN_BARS ? ISOLATOR_KILL_DB : SHORT_BLEND_KILL_DB;
   const mid = t0 + durationSec / 2;
   const barOutSec = fromGrid.barSec / outRate;
+  const swapDurationSec = Math.min(barOutSec / 2, 0.6);
+
   to.eq.setGainAt('low', swapDb, t0 - 0.02);
-  from.eq.rampGain('low', 0, swapDb, mid - barOutSec / 2, barOutSec);
-  to.eq.rampGain('low', swapDb, 0, mid - barOutSec / 2, barOutSec);
-  from.eq.rampGain('high', 0, -8, t0, durationSec);
-  to.eq.setGainAt('high', -8, t0 - 0.02);
-  to.eq.rampGain('high', -8, 0, t0, durationSec);
+  from.eq.rampGain('low', 0, swapDb, mid - swapDurationSec / 2, swapDurationSec);
+  to.eq.rampGain('low', swapDb, 0, mid - swapDurationSec / 2, swapDurationSec);
+
+  // mid vocal & lead carving
+  from.eq.rampGain('mid', 0, MID_CARVE_DB, mid - barOutSec, barOutSec);
+  from.eq.rampGain('mid', MID_CARVE_DB, -10, mid, durationSec / 2);
+  to.eq.setGainAt('mid', -2, t0 - 0.02);
+  to.eq.rampGain('mid', -2, 0, mid - barOutSec, barOutSec);
+
+  // high cymbals & percs
+  from.eq.rampGain('high', 0, -12, t0, durationSec);
+  to.eq.setGainAt('high', -6, t0 - 0.02);
+  to.eq.rampGain('high', -6, 0, t0, durationSec);
 
   // --- after the blend: outgoing cleanup + incoming rate glide to 1 ---
   const tEnd = t0 + durationSec;
@@ -190,12 +215,12 @@ export function plannedBars(
 ): number {
   const fromGrid = gridOf(fromAnalysis);
   const toGrid = toAnalysis ? gridOf(toAnalysis) : null;
-  if (!toAnalysis) return effectiveBlendBars(requestedBars, fromAnalysis.gridConfidence, 1);
+  if (!toAnalysis) return effectiveBlendBars(requestedBars, fromAnalysis.gridConfidence, 1, fromAnalysis.energy, undefined);
   if (!fromGrid || !toGrid || toAnalysis.gridConfidence < MIN_GRID_CONFIDENCE) return Math.min(requestedBars, FILTER_MAX_BARS);
   const raw = (fromGrid.bpm * outRate) / toGrid.bpm;
   const rate = [raw, raw / 2, raw * 2].reduce((best, r) => (Math.abs(r - 1) < Math.abs(best - 1) ? r : best));
   if (!stretchAllowed(rate)) return Math.min(requestedBars, FILTER_MAX_BARS);
-  return effectiveBlendBars(requestedBars, fromAnalysis.gridConfidence, toAnalysis.gridConfidence);
+  return effectiveBlendBars(requestedBars, fromAnalysis.gridConfidence, toAnalysis.gridConfidence, fromAnalysis.energy, toAnalysis.energy);
 }
 
 /**
@@ -279,11 +304,17 @@ function scheduleFilterMix(
   lp.setValueAtTime(FILTER_LP_START_HZ, t0 - 0.02);
   lp.exponentialRampToValueAtTime(FILTER_OPEN_HIGH_HZ, t0 + durationSec);
 
-  // bass hands over in one bar at the midpoint
+  // bass hands over cleanly at the midpoint with isolator cut
   const mid = t0 + durationSec / 2;
-  to.eq.setGainAt('low', KILL_DB, t0 - 0.02);
-  from.eq.rampGain('low', 0, KILL_DB, mid - barOutSec / 2, barOutSec);
-  to.eq.rampGain('low', KILL_DB, 0, mid - barOutSec / 2, barOutSec);
+  const swapDurationSec = Math.min(barOutSec / 2, 0.6);
+  to.eq.setGainAt('low', ISOLATOR_KILL_DB, t0 - 0.02);
+  from.eq.rampGain('low', 0, ISOLATOR_KILL_DB, mid - swapDurationSec / 2, swapDurationSec);
+  to.eq.rampGain('low', ISOLATOR_KILL_DB, 0, mid - swapDurationSec / 2, swapDurationSec);
+
+  // mid carving: prevents vocal collisions during filter mix
+  from.eq.rampGain('mid', 0, MID_CARVE_DB, mid - swapDurationSec, swapDurationSec);
+  to.eq.setGainAt('mid', -3, t0 - 0.02);
+  to.eq.rampGain('mid', -3, 0, mid - swapDurationSec, swapDurationSec);
 
   const tEnd = t0 + durationSec;
   scheduleAfter(ctx, tEnd + 0.2, () => {
