@@ -10,21 +10,30 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 ## ✨ Highlights & Features
 
-- **Addon Speed Benchmark & Auto-Failover (v1.1.9):**
+- **Flawless AI Mixing & DJ Transition Engine (v1.2.0):**
+  - **Downbeat Bass Isolator (-24 dB Cut):** True club isolator cut eliminating kick drum and low-end phase cancellation on phrase downbeats.
+  - **Mid-Band & Vocal Clash Prevention:** Dynamically ducks outgoing mids (-6 dB to -10 dB) so vocals and lead melodies never collide.
+  - **Energy-Aware Dynamic Transition:** Automatically adapts transition length (4-8 bars for high-energy drops vs 16 bars for ambient/acoustic) based on track intensity.
+  - **Fast-Lock Phase Servo:** Tightened 4ms deadband with predictive nudging for immediate beat synchronization without flamming.
+  - **High-End Crossover:** High-shelf rolloff on outgoing cymbals to eliminate comb-filtering swishing.
+- **Tamil2Lyrics Fallback & Script Switcher (v1.2.0):**
+  - Built-in `tamil2lyrics` provider covering South Indian cinema and indie tracks.
+  - Apple-style segmented control allowing users to switch between **Both**, **Tamil Script (தமிழ்)**, and **English (Tanglish)** with instant re-rendering.
+- **Addon Speed Benchmark & Auto-Failover (v1.1.9 - v1.2.0):**
   - **Live Ping Latency:** Real-time roundtrip ping badges (`⚡ 42ms`) on each addon in Settings.
   - **Benchmark Speed Tool:** One-click benchmark pings all addons simultaneously and ranks them by response time.
   - **Fastest-First Auto-Routing:** Queries are automatically routed to the lowest-latency server first, failing over to alternative addons if any server is unreachable.
-- **Windows Taskbar Thumbnail & Enhanced Tray (v1.1.9):**
+- **Windows Taskbar Thumbnail & Enhanced Tray (v1.1.9 - v1.2.0):**
   - **Taskbar Hover Controls:** Previous, Play/Pause, and Next buttons directly in the Windows taskbar preview hover card thumbnail.
   - **System Tray Controls:** Right-click menu with live now-playing title/artist, media controls, and quick mini-player toggle.
-- **Lossless Speed Optimizations & Queue Prefetching (v1.1.8 - v1.1.9):**
+- **Lossless Speed Optimizations & Queue Prefetching (v1.1.8 - v1.2.0):**
   - **Parallel Query Racing:** Executes high-confidence query variations concurrently with `Promise.any` for 50-75% faster search responses.
   - **Persistent Cache:** Caches resolved FLAC tracks in `localStorage` across app restarts (0ms lookup).
   - **Upcoming Track Prefetching:** Resolves lossless FLAC in the background for upcoming tracks in the queue.
   - **Zero-Latency Hot-Swap:** Audio downloads completely into memory before switching, ensuring zero buffering pauses or gaps.
-- **Pre-Enabled Community Addons by Default (v1.1.7 - v1.1.9):**
+- **Pre-Enabled Community Addons by Default (v1.1.7 - v1.2.0):**
   - All verified BitChord community addons (PencariMusic, prodpwh, Confih Hi-Res, Qobuz, and juanjob hi-res) are pre-installed and enabled out-of-the-box.
-- **Enhanced Local Music Library & UI Polish (v1.1.6 - v1.1.9):**
+- **Enhanced Local Music Library & UI Polish (v1.1.6 - v1.2.0):**
   - **Modern Desktop UI:** Clean Apple macOS-inspired geometry — crisp rounded rectangles (`rounded-[10px]`, `rounded-[8px]`, `rounded-[5px]`) replacing legacy pill/oval shapes.
   - **Refined Tracklist Spacing:** Clean gutter padding (`ps-4`) preventing long song titles and `HI-RES` / `24-BIT` badges from crowding artist columns.
   - **Albums & Artists Views:** Browse by album artwork or artist with modern squircle avatars.
@@ -47,7 +56,7 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-👉 **[Download SudinChord Setup 1.1.9.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.1.9/SudinChord.Setup.1.1.9.exe)**
+👉 **[Download SudinChord Setup 1.2.0.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.2.0/SudinChord.Setup.1.2.0.exe)**
 
 Or view all releases and release notes at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
 
