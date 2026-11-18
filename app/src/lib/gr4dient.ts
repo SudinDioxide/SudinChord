@@ -307,8 +307,14 @@ const DEFAULT_POINTS: [number, number][] = [
   [0.45, -0.35],
 ];
 
+export interface AudioPulse {
+  bass: number; // 0.0 to 1.0 (continuous sub-bass & kick energy)
+  mid: number; // 0.0 to 1.0 (vocals & snare energy)
+  beatHit: number; // 0.0 to 1.0 (transient kick drum impulse)
+}
+
 export interface Gr4dientRenderer {
-  render: (colors: Oklab[], phase: number, mode: Gr4dientMode) => void;
+  render: (colors: Oklab[], phase: number, mode: Gr4dientMode, pulse?: AudioPulse) => void;
   dispose: () => void;
 }
 
@@ -397,7 +403,7 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
   const flatCols = new Float32Array(15);
 
   return {
-    render(colors: Oklab[], phase: number, mode: Gr4dientMode) {
+    render(colors: Oklab[], phase: number, mode: Gr4dientMode, pulse?: AudioPulse) {
       const scale = Math.min(window.devicePixelRatio || 1, 1.2);
       const width = Math.max(1, Math.round(canvas.clientWidth * scale));
       const height = Math.max(1, Math.round(canvas.clientHeight * scale));
@@ -416,6 +422,20 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
         flatCols[i * 3 + 2] = c[2];
       }
 
+      const bass = pulse ? pulse.bass : 0;
+      const beat = pulse ? pulse.beatHit : 0;
+
+      // Dynamic physical reaction to music beat & bass drops
+      const baseScale = mode === 1 ? 0.7 : mode === 2 ? 0.9 : 1.1;
+      const dynamicScale = baseScale * (1.0 + beat * 0.12);
+
+      const baseWarp = mode === 2 ? 0.9 : 0.75;
+      const dynamicWarp = baseWarp + bass * 0.45 + beat * 0.25;
+
+      const dynamicMotion = 0.85 + bass * 0.6 + beat * 0.4;
+      const dynamicBright = -0.04 + beat * 0.06;
+      const dynamicSat = 1.08 + beat * 0.2;
+
       gl.uniform2f(U.uRes!, width, height);
       gl.uniform1f(U.uPhase!, phase);
       gl.uniform1i(U.uMode!, mode);
@@ -424,11 +444,11 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
       gl.uniform2fv(U.uPts!, flatPts);
       gl.uniform2f(U.uFocus!, 0.0, 0.4);
       gl.uniform1f(U.uSeed!, 3.14);
-      gl.uniform1f(U.uScale!, mode === 1 ? 0.7 : mode === 2 ? 0.9 : 1.1);
-      gl.uniform1f(U.uWarp!, mode === 2 ? 0.9 : 0.75);
+      gl.uniform1f(U.uScale!, dynamicScale);
+      gl.uniform1f(U.uWarp!, dynamicWarp);
       gl.uniform1f(U.uSoft!, 0.55);
       gl.uniform1f(U.uAngle!, 0.0);
-      gl.uniform1f(U.uMotion!, 0.85);
+      gl.uniform1f(U.uMotion!, dynamicMotion);
       gl.uniform1f(U.uGrain!, 0.12);
       gl.uniform1f(U.uGrainSize!, 1.4);
       gl.uniform1f(U.uGrainAnim!, 1.0);
@@ -436,8 +456,8 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
       gl.uniform1f(U.uLevels!, 4.0);
       gl.uniform1f(U.uPixel!, 1.0);
       gl.uniform1f(U.uContrast!, 1.0);
-      gl.uniform1f(U.uSat!, 1.08);
-      gl.uniform1f(U.uBright!, -0.04);
+      gl.uniform1f(U.uSat!, dynamicSat);
+      gl.uniform1f(U.uBright!, dynamicBright);
       gl.uniform1f(U.uVignette!, 0.35);
 
       gl.drawArrays(gl.TRIANGLES, 0, 3);

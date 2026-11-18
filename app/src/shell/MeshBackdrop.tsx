@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { meshPalette, type Rgb } from '@/lib/meshPalette';
+import { getAudioAnalyser } from '@/state/player';
 import {
   createGr4dientRenderer,
   extractGr4dientColors,
@@ -183,10 +184,54 @@ export function MeshBackdrop({
     const tempo = bpm && bpm >= 40 && bpm <= 260 ? bpm : 120;
     const loopSec = (4 * 240) / tempo;
 
+    // Audio spectrum data buffers and beat detector variables
+    const freqData = new Uint8Array(64);
+    let runningBassAvg = 0.2;
+    let beatHit = 0;
+
     const tick = (now: number) => {
       frame = 0;
-      if (animate) s.seconds += Math.min(now - last, 100) / 1000;
+      const dt = Math.min(now - last, 100) / 1000;
       last = now;
+
+      // Read real-time audio dynamics from Web Audio AnalyserNode
+      const analyser = getAudioAnalyser();
+      let bassEnergy = 0;
+      let midEnergy = 0;
+
+      if (analyser && animate) {
+        analyser.getByteFrequencyData(freqData);
+
+        // Sub-bass & kick drum: bins 0 to 6 (~20 Hz - 150 Hz)
+        let bassSum = 0;
+        for (let i = 0; i < 7; i++) {
+          bassSum += freqData[i]!;
+        }
+        bassEnergy = bassSum / (7 * 255);
+
+        // Mid frequencies: bins 10 to 35 (~250 Hz - 850 Hz)
+        let midSum = 0;
+        for (let i = 10; i < 35; i++) {
+          midSum += freqData[i]!;
+        }
+        midEnergy = midSum / (25 * 255);
+
+        // Dynamic transient beat detection (kick drum strike)
+        runningBassAvg = runningBassAvg * 0.94 + bassEnergy * 0.06;
+        if (bassEnergy > runningBassAvg * 1.25 && bassEnergy > 0.2) {
+          const delta = (bassEnergy - runningBassAvg) * 3.5;
+          beatHit = Math.max(beatHit, Math.min(1.0, delta));
+        }
+      }
+
+      // Smooth decay of beat hit impulse
+      beatHit *= 0.88;
+
+      if (animate) {
+        // Musical momentum: fluid surges with kicks and loud dynamic sections
+        const momentum = 1.0 + bassEnergy * 0.5 + beatHit * 0.35;
+        s.seconds += dt * momentum;
+      }
 
       const fade = Math.min(1, (now - s.fadeStart) / FADE_MS);
       if (now - drawn >= FRAME_MS - 1) {
@@ -200,7 +245,11 @@ export function MeshBackdrop({
         const phase = still ? 0.0 : (s.seconds % loopSec) / loopSec;
 
         if (gr4dient) {
-          gr4dient.render(currentColors, phase, activeMode);
+          gr4dient.render(currentColors, phase, activeMode, {
+            bass: bassEnergy,
+            mid: midEnergy,
+            beatHit,
+          });
         } else if (fallbackCanvas) {
           fallbackCanvas.draw(s.seconds);
         }
