@@ -1,4 +1,4 @@
-import { Maximize, Minimize, PictureInPicture2, SlidersHorizontal, X } from 'lucide-react';
+import { Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useAudioFx } from '@/state/audioFx';
 import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -32,7 +32,9 @@ import { useUi } from '@/state/ui';
 import { useHasVideo, useVideo } from '@/state/video';
 import { Credits, PageLink, pageLink } from './Lcd';
 import { LyricsPanel } from './LyricsPanel';
-import { MeshBackdrop } from './MeshBackdrop';
+import { MeshBackdrop, useGr4dientMode } from './MeshBackdrop';
+import { GR4DIENT_MODES, type Gr4dientMode } from '@/lib/gr4dient';
+import { analyzer } from '@/playback/automix/analysis/analyzer';
 import { albumPageFor } from './nowPlayingLinks';
 import { UpNext } from './UpNext';
 import { MixWindowHighlight, NerdStats } from './NerdStats';
@@ -382,6 +384,9 @@ export function FullScreenPlayer() {
   const hidden = theater && playing && idle ? ' pointer-events-none opacity-0' : '';
   const corner = `${chrome} transition-[background-color,color,opacity] duration-300${hidden}`;
 
+  const [gradientMode, setGradientMode] = useGr4dientMode();
+  const bpm = analyzer.get(nowPlaying.videoId)?.bpm ?? null;
+
   return (
     <div
       // Over everything but menus and dialogs, which portal above it. The on-dark colours come from tokens.css (data-full-screen).
@@ -397,7 +402,7 @@ export function FullScreenPlayer() {
       onKeyDown={wake}
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
-      <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} />
+      <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} bpm={bpm} mode={gradientMode} />
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
@@ -419,13 +424,21 @@ export function FullScreenPlayer() {
       >
         <X size={20} />
       </button>
-      {/* Top right actions: Video quality, Visualizer, Sleep Timer, PiP, Fullscreen */}
+      {/* Top right actions: Video quality, Visualizer, Gradient style, Equalizer, Sleep Timer, PiP, Fullscreen */}
       <div
         className={`absolute top-12 right-5 z-20 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         {video && <VideoQuality />}
         <VisualizerButton className={chromeButton} placement="below-end" />
+        <button
+          className={chromeButton}
+          aria-label={`Gradient Style: ${GR4DIENT_MODES[gradientMode].name}`}
+          title={`Gradient Style: ${GR4DIENT_MODES[gradientMode].name} (${GR4DIENT_MODES[gradientMode].description})`}
+          onClick={() => setGradientMode(((gradientMode + 1) % 4) as Gr4dientMode)}
+        >
+          <Sparkles size={18} strokeWidth={2.2} />
+        </button>
         <button
           className={chromeButton}
           aria-label="Equalizer & Audio FX"

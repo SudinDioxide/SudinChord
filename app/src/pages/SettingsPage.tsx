@@ -11,6 +11,8 @@ import { useHistorySettings } from '@/playback/historyReporting';
 import { Select } from '@/components/Select';
 import { AUTOMIX_BARS } from '@/playback/automix/choices';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
+import { useGr4dientMode } from '@/shell/MeshBackdrop';
+import { GR4DIENT_MODES, type Gr4dientMode } from '@/lib/gr4dient';
 import { AddonSettings } from './AddonSettings';
 import {
   AppleMusicIntegration,
@@ -65,6 +67,7 @@ export default function SettingsPage() {
   const shareHistory = useHistorySettings((s) => s.share);
   const setShareHistory = useHistorySettings((s) => s.setShare);
   const { setAutoplay, setCrossfade, setAutomix, setAutomixBars, setShowNerdStats } = usePlayer.getState();
+  const [gradientMode, setGradientMode] = useGr4dientMode();
   const [lyrics, setLyrics] = useState(false);
   const present = extension.state === 'present';
   const discordText =
@@ -187,6 +190,15 @@ export default function SettingsPage() {
             checked={showNerdStats}
             onChange={setShowNerdStats}
           />
+          <label className={settingsUi.controlRow}>
+            <span>Gradient Backdrop Style</span>
+            <Select<Gr4dientMode>
+              label="Gradient Backdrop Style"
+              value={gradientMode}
+              options={GR4DIENT_MODES.map((m) => ({ value: m.id, label: `${m.name} (${m.description})` }))}
+              onChange={setGradientMode}
+            />
+          </label>
         </section>
         {automix && (
           <p className={settingsUi.footer}>
