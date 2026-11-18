@@ -10,6 +10,12 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 ## ✨ Highlights & Features
 
+- **Beat-Reactive Gr4dient Backdrop (v1.2.1):**
+  - **Dynamic Audio Reactive Shaders:** Real-time WebGL audio visualization connected directly to master output FFT bins. Sub-bass kicks trigger instantaneous transient scale bounce (+12% scale with exponential decay) and dynamic domain warping (`uWarp`).
+  - **Oklab Color Mixing:** Advanced perceptual color blending in Oklab color space completely eliminates grayish muddy midtones during gradient interpolation.
+  - **4 Motion Modes:** Field (smooth fluid mesh), Current (directional harmonic flow), Fold (silky ribbon caustics), and Beam (luminous angular light rays). Switchable on the fly with the top toolbar button or in Settings.
+  - **Bayer 8x8 Dithering & Living Grain:** Temporal noise reduction and film grain for banding-free visual aesthetics.
+  - **BPM-Synchronized Flow Speed:** Backdrop velocity smoothly scales with track tempo and instantaneous musical momentum.
 - **Flawless AI Mixing & DJ Transition Engine (v1.2.0):**
   - **Downbeat Bass Isolator (-24 dB Cut):** True club isolator cut eliminating kick drum and low-end phase cancellation on phrase downbeats.
   - **Mid-Band & Vocal Clash Prevention:** Dynamically ducks outgoing mids (-6 dB to -10 dB) so vocals and lead melodies never collide.
@@ -56,7 +62,7 @@ A modern, high-fidelity desktop music player for Windows built with React, TypeS
 
 You can download the ready-to-run Windows installer directly from GitHub Releases:
 
-👉 **[Download SudinChord Setup 1.2.0.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.2.0/SudinChord.Setup.1.2.0.exe)**
+👉 **[Download SudinChord Setup 1.2.1.exe (Latest Release)](https://github.com/SudinDioxide/SudinChord/releases/download/v1.2.1/SudinChord.Setup.1.2.1.exe)**
 
 Or view all releases and release notes at: **[GitHub Releases](https://github.com/SudinDioxide/SudinChord/releases)**
 
