@@ -187,25 +187,33 @@ function ArtworkStage({
                 vinylMode ? '-translate-x-[20%]' : 'translate-x-0'
               }`}
             >
-              {artworkUrl && (
+              {artworkUrl ? (
                 <>
+                  {/* Blurred underlayer as instant loading backdrop */}
+                  <img
+                    key={`under-${artworkUrl}`}
+                    className="absolute inset-0 size-full object-cover scale-110 blur-xl opacity-40 select-none pointer-events-none"
+                    src={artworkUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    decoding="async"
+                  />
+
                   {/* Main Cover Artwork */}
                   <img
                     key={artworkUrl}
-                    className="size-full object-cover select-none pointer-events-none"
+                    className="relative size-full object-cover select-none pointer-events-none"
                     src={sizedArtwork(artworkUrl, 600)}
-                    alt="Album Cover"
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    decoding="async"
+                    onError={(e) => {
+                      if (artworkUrl && e.currentTarget.src !== artworkUrl) {
+                        e.currentTarget.src = artworkUrl;
+                      }
+                    }}
                     draggable={false}
                   />
-
-                  {/* Sleeve spine crease on the left */}
-                  <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-black/60 via-white/10 to-transparent" />
-
-                  {/* Sleeve surface diagonal gloss */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/30" />
-
-                  {/* Sleeve inner depth edge on the right where vinyl emerges */}
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-black/90 to-transparent shadow-[inset_-3px_0_6px_rgba(0,0,0,0.8)]" />
 
                   {/* Specular Interactive Glass Shine on Hover */}
                   {tilt.hovered && (
@@ -217,6 +225,11 @@ function ArtworkStage({
                     />
                   )}
                 </>
+              ) : (
+                <div className="size-full flex flex-col items-center justify-center bg-gradient-to-tr from-[#16161c] to-[#252636] text-white/30">
+                  <Disc3 size={56} className="opacity-40 mb-2" />
+                  <span className="text-[10px] font-mono tracking-widest uppercase text-white/40">SudinChord</span>
+                </div>
               )}
 
               {/* Apple Motion Artwork (if available and vinyl is not out) */}
@@ -482,14 +495,6 @@ export function FullScreenPlayer() {
           onClick={() => useAudioFx.getState().setModalOpen(true)}
         >
           <SlidersHorizontal size={18} strokeWidth={2.2} />
-        </button>
-        <button
-          className={chromeButton}
-          aria-label="Toggle Vinyl Turntable Mode"
-          title={`Vinyl Turntable: ${vinylMode ? 'ON' : 'OFF'}`}
-          onClick={() => setVinylMode(!vinylMode)}
-        >
-          <Disc3 size={18} strokeWidth={2.2} className={vinylMode ? 'text-[#fa233b] animate-spin' : ''} />
         </button>
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
