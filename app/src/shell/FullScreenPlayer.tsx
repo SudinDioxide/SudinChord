@@ -216,15 +216,6 @@ function ArtworkStage({
                     draggable={false}
                   />
 
-                  {/* Sleeve spine crease on the left */}
-                  <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-black/60 via-white/10 to-transparent" />
-
-                  {/* Sleeve surface diagonal gloss */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/30" />
-
-                  {/* Sleeve inner depth edge on the right where vinyl emerges */}
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-black/90 to-transparent shadow-[inset_-3px_0_6px_rgba(0,0,0,0.8)]" />
-
                   {/* Specular Interactive Glass Shine on Hover */}
                   {tilt.hovered && (
                     <div
