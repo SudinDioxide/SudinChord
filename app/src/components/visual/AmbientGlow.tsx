@@ -1,36 +1,32 @@
 import { useEffect, useRef } from 'react';
 import { getAudioAnalyser, usePlayer } from '@/state/player';
 import type { ArtworkAccent } from '@/lib/artworkAccent';
+import { StereoDriftAnalyzer } from '@/lib/stereoDriftEngine';
 
 export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent | null; enabled?: boolean }) {
   const isPlaying = usePlayer((s) => s.status === 'playing');
   const glowRef = useRef<HTMLDivElement>(null);
+  const analyzerRef = useRef<StereoDriftAnalyzer>(new StereoDriftAnalyzer());
 
   useEffect(() => {
     if (!enabled || !glowRef.current) return;
     const el = glowRef.current;
-    const analyser = getAudioAnalyser();
-    if (!analyser) return;
+    const analyzer = analyzerRef.current;
 
     let animId: number;
-    const freqData = new Uint8Array(32);
 
     const tick = () => {
+      const analyser = getAudioAnalyser();
+      const dynamics = analyzer.analyze(analyser, isPlaying);
+
       if (!isPlaying) {
         el.style.opacity = '0.15';
         el.style.transform = 'scale(1)';
         return;
       }
 
-      analyser.getByteFrequencyData(freqData);
-      // Sample low-bass kick energy (bins 0-3: 20-150 Hz)
-      const b0 = freqData[0] ?? 0;
-      const b1 = freqData[1] ?? 0;
-      const b2 = freqData[2] ?? 0;
-      const b3 = freqData[3] ?? 0;
-      const bassEnergy = (b0 + b1 + b2 + b3) / (4 * 255);
-      const targetOpacity = 0.25 + bassEnergy * 0.55;
-      const targetScale = 1.0 + bassEnergy * 0.04;
+      const targetOpacity = 0.22 + dynamics.bass * 0.45 + dynamics.beatHit * 0.28;
+      const targetScale = 1.0 + dynamics.bass * 0.025 + dynamics.beatHit * 0.035;
 
       el.style.opacity = targetOpacity.toFixed(2);
       el.style.transform = `scale(${targetScale.toFixed(3)})`;
@@ -38,7 +34,7 @@ export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent
       animId = requestAnimationFrame(tick);
     };
 
-    tick();
+    animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
   }, [isPlaying, enabled]);
 
