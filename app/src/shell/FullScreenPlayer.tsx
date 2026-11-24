@@ -1,6 +1,6 @@
 import { Disc3, Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useAudioFx } from '@/state/audioFx';
-import { VinylRecord, Tonearm } from '@/components/music/VinylRecord';
+import { VinylRecord } from '@/components/music/VinylRecord';
 import { AmbientGlow } from '@/components/visual/AmbientGlow';
 import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -98,6 +98,7 @@ function ArtworkStage({
   motion,
   accent,
   vinylMode,
+  onToggleVinyl,
 }: {
   artworkUrl: string | null;
   playing: boolean;
@@ -107,8 +108,10 @@ function ArtworkStage({
   motion: AppleMotion | null;
   accent: ArtworkAccent;
   vinylMode?: boolean;
+  onToggleVinyl?: () => void;
 }) {
   const [tilt, setTilt] = useState({ rx: 0, ry: 0, glareX: 50, glareY: 50, hovered: false });
+  const lastTapRef = useRef(0);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (video) return;
@@ -124,6 +127,25 @@ function ArtworkStage({
     setTilt((prev) => ({ ...prev, rx: 0, ry: 0, hovered: false }));
   };
 
+  // Double tap / double click to slide out & rotate vinyl
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (video) return;
+    e.preventDefault();
+    onToggleVinyl?.();
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (video) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 350) {
+      e.preventDefault();
+      onToggleVinyl?.();
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
+  };
+
   return (
     <div
       className={`relative w-(--art) rounded-[14px] transition-transform duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none ${
@@ -131,6 +153,9 @@ function ArtworkStage({
       }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
+      onDoubleClick={handleDoubleClick}
+      onTouchEnd={handleTouchEnd}
+      title="Double-tap album cover to toggle vinyl record"
       style={{ perspective: 900 }}
     >
       {/* 3D Container with tilt */}
@@ -141,100 +166,70 @@ function ArtworkStage({
           transformStyle: 'preserve-3d',
         }}
       >
-        {!video && vinylMode ? (
-          <div className="relative size-full flex items-center justify-center">
-            {/* Spinning Vinyl Record with grooves and center label */}
+        {video ? (
+          !theater && <VideoSurface className="absolute inset-0" />
+        ) : (
+          <div className="relative size-full flex items-center justify-center cursor-pointer select-none">
+            {/* Spinning Vinyl Record (Slides OUT to the right and rotates) */}
             <div
-              className={`absolute size-[92%] transition-all duration-700 ease-[cubic-bezier(0.2,1,0.3,1)] ${
-                playing ? 'translate-x-[26%] scale-100' : 'translate-x-[8%] scale-98'
+              className={`absolute size-[94%] transition-all duration-650 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${
+                vinylMode
+                  ? 'translate-x-[28%] scale-100 opacity-100 z-1 pointer-events-auto'
+                  : 'translate-x-0 scale-95 opacity-0 pointer-events-none z-0'
               }`}
             >
-              <VinylRecord artworkUrl={artworkUrl} playing={playing} />
+              <VinylRecord artworkUrl={artworkUrl} playing={playing && !!vinylMode} />
             </div>
 
-            {/* Tonearm */}
-            <Tonearm playing={playing} className={playing ? 'translate-x-[26%]' : 'translate-x-[8%]'} />
-
-            {/* Album Jacket Sleeve */}
-            <div className="relative z-10 size-[92%] -translate-x-[20%] rounded-[12px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-black">
+            {/* Album Jacket Sleeve (Moves slightly left when vinyl comes out) */}
+            <div
+              className={`relative z-10 size-[94%] rounded-[12px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#111] transition-transform duration-600 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${
+                vinylMode ? '-translate-x-[20%]' : 'translate-x-0'
+              }`}
+            >
               {artworkUrl && (
-                <img
-                  src={sizedArtwork(artworkUrl, 600)}
-                  alt="Album Jacket"
-                  className="size-full object-cover"
+                <>
+                  {/* Main Cover Artwork */}
+                  <img
+                    key={artworkUrl}
+                    className="size-full object-cover select-none pointer-events-none"
+                    src={sizedArtwork(artworkUrl, 600)}
+                    alt="Album Cover"
+                    draggable={false}
+                  />
+
+                  {/* Sleeve spine crease on the left */}
+                  <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-black/60 via-white/10 to-transparent" />
+
+                  {/* Sleeve surface diagonal gloss */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/30" />
+
+                  {/* Sleeve inner depth edge on the right where vinyl emerges */}
+                  <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-black/90 to-transparent shadow-[inset_-3px_0_6px_rgba(0,0,0,0.8)]" />
+
+                  {/* Specular Interactive Glass Shine on Hover */}
+                  {tilt.hovered && (
+                    <div
+                      className="pointer-events-none absolute inset-0 z-1 size-full transition-opacity duration-300"
+                      style={{
+                        background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.22) 0%, transparent 65%)`,
+                      }}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* Apple Motion Artwork (if available and vinyl is not out) */}
+              {motion && !vinylMode && (
+                <MotionArtwork
+                  key={motion.url}
+                  motion={motion}
+                  className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
+                  playing={playing}
                 />
               )}
-              {/* Sleeve spine crease on the left */}
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-black/60 via-white/10 to-transparent" />
-              {/* Sleeve surface diagonal gloss */}
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/30" />
-              {/* Sleeve inner depth edge on the right where vinyl emerges */}
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-black/90 to-transparent shadow-[inset_-3px_0_6px_rgba(0,0,0,0.8)]" />
             </div>
           </div>
-        ) : (
-          <>
-            {artworkUrl && (
-              <>
-                {/* Deep Ambient Radiosity Glow */}
-                <img
-                  key={`deep-glow-${artworkUrl}`}
-                  className={`${artworkLayer} -z-2 translate-y-4 scale-102 blur-[48px] saturate-[2.4] data-loaded:opacity-75`}
-                  src={sizedArtwork(artworkUrl, 80)}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-                />
-
-                {/* Core Glow */}
-                <img
-                  key={`core-glow-${artworkUrl}`}
-                  className={`${artworkLayer} -z-1 translate-y-2 scale-98 blur-[18px] saturate-200 data-loaded:opacity-50`}
-                  src={sizedArtwork(artworkUrl, 120)}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-                />
-
-                {/* Main Cover Artwork */}
-                <img
-                  key={artworkUrl}
-                  className={`${artworkLayer} bg-[#ffffff12] shadow-[0_16px_40px_rgba(0,0,0,0.45)] data-loaded:opacity-100`}
-                  style={{
-                    boxShadow: `0 18px 45px rgba(0,0,0,0.45), 0 0 45px ${accent.glow}`,
-                  }}
-                  src={sizedArtwork(artworkUrl, 600)}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-                />
-
-                {/* Specular Interactive Glass Shine on Hover */}
-                {!video && tilt.hovered && (
-                  <div
-                    className="pointer-events-none absolute inset-0 z-1 size-full rounded-[inherit] transition-opacity duration-300"
-                    style={{
-                      background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.22) 0%, transparent 65%)`,
-                    }}
-                  />
-                )}
-              </>
-            )}
-
-            {/* Apple Motion Artwork */}
-            {motion && (
-              <MotionArtwork
-                key={motion.url}
-                motion={motion}
-                className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
-                playing={playing}
-              />
-            )}
-            {video && !theater && <VideoSurface className="absolute inset-0" />}
-          </>
         )}
       </div>
 
@@ -550,6 +545,7 @@ export function FullScreenPlayer() {
             motion={motion}
             accent={accent}
             vinylMode={vinylMode}
+            onToggleVinyl={() => setVinylMode((v) => !v)}
           />
 
           <div className={`flex items-center gap-3${theater ? '' : ' mt-[clamp(20px,3.2vh,32px)]'}${column ? ' max-md:mt-0' : ''}`}>
