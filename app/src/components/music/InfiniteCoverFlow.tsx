@@ -29,22 +29,18 @@ export function InfiniteCoverFlow({
   height = 420,
 }: InfiniteCoverFlowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [targetOffset, setTargetOffset] = useState(initialIndex);
-  const currentOffsetRef = useRef(initialIndex);
-  const [animOffset, setAnimOffset] = useState(initialIndex);
-
-  // Drag state
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [dragOffset, setDragOffset] = useState(0);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
-  const startOffsetRef = useRef(initialIndex);
-  const lastXRef = useRef(0);
-  const lastTimeRef = useRef(0);
-  const velocityRef = useRef(0);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const onActiveChangeRef = useRef(onActiveChange);
+  onActiveChangeRef.current = onActiveChange;
 
   const count = items.length;
 
-  // Modulo wrap helper
+  // Safe modulo wrap helper
   const wrap = useCallback(
     (val: number) => {
       if (count === 0) return 0;
@@ -53,63 +49,26 @@ export function InfiniteCoverFlow({
     [count],
   );
 
-  // Smooth animation frame loop for spring / momentum physics
-  useEffect(() => {
-    let animId: number;
-
-    const tick = () => {
-      if (isDraggingRef.current) {
-        setAnimOffset(currentOffsetRef.current);
-        animId = requestAnimationFrame(tick);
-        return;
-      }
-
-      // Smooth lerp to targetOffset
-      const diff = targetOffset - currentOffsetRef.current;
-      if (Math.abs(diff) > 0.001) {
-        currentOffsetRef.current += diff * 0.18;
-        setAnimOffset(currentOffsetRef.current);
-        animId = requestAnimationFrame(tick);
-      } else {
-        currentOffsetRef.current = targetOffset;
-        setAnimOffset((prev) => (Math.abs(prev - targetOffset) < 0.0001 ? prev : targetOffset));
-        const rounded = wrap(Math.round(targetOffset));
-        setCurrentIndex((prev) => {
-          if (prev !== rounded) {
-            if (items[rounded]) {
-              onActiveChange?.(rounded, items[rounded]);
-            }
-            return rounded;
-          }
-          return prev;
-        });
-      }
-    };
-
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [targetOffset, count, items, onActiveChange, wrap]);
-
-  const snapTo = useCallback(
+  const goTo = useCallback(
     (index: number) => {
       const wrapped = wrap(index);
-      // Find shortest path between targetOffset and wrapped
-      setTargetOffset(wrapped);
-      setCurrentIndex(wrapped);
-      if (items[wrapped]) {
-        onActiveChange?.(wrapped, items[wrapped]);
+      setActiveIndex(wrapped);
+      setDragOffset(0);
+      const currentItem = itemsRef.current[wrapped];
+      if (currentItem) {
+        onActiveChangeRef.current?.(wrapped, currentItem);
       }
     },
-    [wrap, items, onActiveChange],
+    [wrap],
   );
 
   const prev = useCallback(() => {
-    setTargetOffset((cur) => Math.round(cur) - 1);
-  }, []);
+    goTo(activeIndex - 1);
+  }, [goTo, activeIndex]);
 
   const next = useCallback(() => {
-    setTargetOffset((cur) => Math.round(cur) + 1);
-  }, []);
+    goTo(activeIndex + 1);
+  }, [goTo, activeIndex]);
 
   // Keyboard navigation: Left/Right arrows
   useEffect(() => {
@@ -127,32 +86,18 @@ export function InfiniteCoverFlow({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [prev, next]);
 
-  // Pointer drag events with momentum
+  // Pointer drag events with smooth release
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (count <= 1) return;
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
-    lastXRef.current = e.clientX;
-    lastTimeRef.current = performance.now();
-    startOffsetRef.current = currentOffsetRef.current;
-    velocityRef.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
-    const now = performance.now();
-    const dt = Math.max(1, now - lastTimeRef.current);
-    const dx = e.clientX - lastXRef.current;
-
-    velocityRef.current = dx / dt; // pixels per ms
-    lastXRef.current = e.clientX;
-    lastTimeRef.current = now;
-
-    // 140px per item
-    const totalDx = e.clientX - startXRef.current;
-    currentOffsetRef.current = startOffsetRef.current - totalDx / 140;
-    setAnimOffset(currentOffsetRef.current);
+    const dx = e.clientX - startXRef.current;
+    setDragOffset(dx);
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -162,49 +107,52 @@ export function InfiniteCoverFlow({
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
 
-    // Fling momentum
-    const momentum = -velocityRef.current * 8; // items to fling
-    const rawTarget = currentOffsetRef.current + momentum;
-    const nearest = Math.round(rawTarget);
-    setTargetOffset(nearest);
+    const threshold = 50; // pixels to step
+    if (dragOffset > threshold) {
+      goTo(activeIndex - Math.max(1, Math.round(dragOffset / 140)));
+    } else if (dragOffset < -threshold) {
+      goTo(activeIndex + Math.max(1, Math.round(-dragOffset / 140)));
+    } else {
+      setDragOffset(0);
+    }
   };
 
   // Wheel horizontal/vertical scrolling
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (Math.abs(delta) > 10) {
+    if (Math.abs(delta) > 20) {
       if (delta > 0) next();
       else prev();
     }
   };
 
-  const activeIndex = wrap(Math.round(animOffset));
-  const activeItem = items[activeIndex];
+  const virtualOffset = activeIndex - dragOffset / 140;
+  const currentActive = items[wrap(activeIndex)];
 
   // Visible window: render covers within offset delta [-5 .. 5]
   const visibleCovers = useMemo(() => {
     if (count === 0) return [];
     const windowRadius = Math.min(5, Math.floor(count / 2) + 1);
-    const currentBase = Math.round(animOffset);
+    const centerIdx = activeIndex;
     const result: Array<{ item: CoverFlowItem; index: number; delta: number; uniqueKey: string }> = [];
 
     for (let d = -windowRadius; d <= windowRadius; d++) {
-      const idx = wrap(currentBase + d);
+      const idx = wrap(centerIdx + d);
       const item = items[idx];
       if (item) {
-        const delta = (currentBase + d) - animOffset;
+        const delta = d + dragOffset / 140;
         result.push({
           item,
           index: idx,
           delta,
-          uniqueKey: `${item.id}-${currentBase + d}`,
+          uniqueKey: `${item.id}-${centerIdx + d}`,
         });
       }
     }
 
     // Sort by z-index (items further from center render behind)
     return result.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [count, animOffset, items, wrap]);
+  }, [count, activeIndex, dragOffset, items, wrap]);
 
   if (count === 0) {
     return (
@@ -245,12 +193,8 @@ export function InfiniteCoverFlow({
       >
         {visibleCovers.map(({ item, index, delta, uniqueKey }) => {
           const absDelta = Math.abs(delta);
-          const isCenter = absDelta < 0.35;
+          const isCenter = absDelta < 0.45;
 
-          // Spatial 3D transform formula:
-          // Center: rotateY 0deg, translateZ 90px, scale 1.15
-          // Left: rotateY 56deg, translateX -150px - absDelta * 80px, translateZ -90px
-          // Right: rotateY -56deg, translateX 150px + absDelta * 80px, translateZ -90px
           let rotateY = 0;
           let translateX = 0;
           let translateZ = 0;
@@ -284,17 +228,18 @@ export function InfiniteCoverFlow({
               key={uniqueKey}
               onClick={() => {
                 if (!isCenter) {
-                  snapTo(index);
+                  goTo(index);
                 } else {
                   item.onSelect?.();
                 }
               }}
-              className="absolute size-48 sm:size-56 cursor-pointer will-change-transform transition-opacity duration-300 group"
+              className="absolute size-48 sm:size-56 cursor-pointer will-change-transform group"
               style={{
                 transformStyle: 'preserve-3d',
                 transform: `translateX(${translateX.toFixed(1)}px) translateZ(${translateZ.toFixed(1)}px) rotateY(${rotateY.toFixed(1)}deg) scale(${scale.toFixed(3)})`,
                 opacity: opacity.toFixed(2),
                 zIndex: Math.round(100 - absDelta * 10),
+                transition: isDraggingRef.current ? 'none' : 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1), opacity 450ms ease',
               }}
             >
               {/* Album Cover Tile */}
@@ -366,25 +311,25 @@ export function InfiniteCoverFlow({
             <ChevronLeft size={18} />
           </button>
 
-          {activeItem && (
+          {currentActive && (
             <div className="flex flex-col items-center min-w-0 px-4">
               <div className="flex items-center gap-2">
                 <h3
-                  onClick={() => activeItem.onSelect?.()}
+                  onClick={() => currentActive.onSelect?.()}
                   className="text-base sm:text-lg font-bold text-white truncate hover:underline cursor-pointer"
                 >
-                  {activeItem.title}
+                  {currentActive.title}
                 </h3>
-                {activeItem.isHiRes && (
+                {currentActive.isHiRes && (
                   <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-400/20 border border-amber-400/30 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-300">
                     <Sparkles size={9} />
                     HI-RES
                   </span>
                 )}
               </div>
-              <p className="text-xs text-white/60 truncate mt-0.5">{activeItem.artist}</p>
-              {activeItem.trackCount !== undefined && (
-                <span className="text-[10px] font-mono text-white/40 mt-0.5">{activeItem.trackCount} tracks</span>
+              <p className="text-xs text-white/60 truncate mt-0.5">{currentActive.artist}</p>
+              {currentActive.trackCount !== undefined && (
+                <span className="text-[10px] font-mono text-white/40 mt-0.5">{currentActive.trackCount} tracks</span>
               )}
             </div>
           )}

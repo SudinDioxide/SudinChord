@@ -1,300 +1,257 @@
+import { getAudioAnalyser } from '@/state/player';
+import type { ArtworkAccent } from './artworkAccent';
+
+export interface StereoDriftAudioMetrics {
+  bass: number;       // 0.0 - 1.0 (sub-bass & kick drum energy)
+  mids: number;       // 0.0 - 1.0 (vocals & synth harmony)
+  treble: number;     // 0.0 - 1.0 (hi-hats & presence)
+  energy: number;     // 0.0 - 1.0 (overall RMS volume)
+  beatPulse: number;  // 0.0 - 1.0 (punchy kick drum transient hit)
+}
+
+export interface StereoDriftColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export function parseColor(colorStr: string): StereoDriftColor {
+  // Handles "#rrggbb", "rgb(r, g, b)", and "rgba(r, g, b, a)"
+  if (colorStr.startsWith('#')) {
+    const hex = colorStr.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16) || 0;
+    const g = parseInt(hex.slice(2, 4), 16) || 0;
+    const b = parseInt(hex.slice(4, 6), 16) || 0;
+    return { r, g, b };
+  }
+  const match = colorStr.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+  if (match) {
+    return {
+      r: parseInt(match[1]!, 10) || 0,
+      g: parseInt(match[2]!, 10) || 0,
+      b: parseInt(match[3]!, 10) || 0,
+    };
+  }
+  return { r: 255, g: 0, b: 51 };
+}
+
+export function lerpColor(c1: StereoDriftColor, c2: StereoDriftColor, t: number): StereoDriftColor {
+  const clampT = Math.max(0, Math.min(1, t));
+  return {
+    r: Math.round(c1.r + (c2.r - c1.r) * clampT),
+    g: Math.round(c1.g + (c2.g - c1.g) * clampT),
+    b: Math.round(c1.b + (c2.b - c1.b) * clampT),
+  };
+}
+
 /**
- * StereoDrift Audio-Reactive Gradient & Visualizer Engine.
- * Adapted from stereoDrift (https://github.com/stereoDrift/stereoDrift.github.io)
+ * StereoDrift Gradient & Audio-Reactive Visualizer Engine.
+ * Adapted from stereoDrift (https://github.com/stereoDrift/stereoDrift.github.io).
  *
- * Features:
- * - Real-time Web Audio multi-band FFT analysis (sub-bass kick, mid melody, treble air).
- * - Transient beat detection with elastic punch and smooth exponential decay.
- * - Smooth 2D Perlin noise flow-field coordinates for organic gradient drift.
- * - StereoDrift aesthetic color palettes (Vapor, Analog, Euphoria, Emerald, Sunset, Noir) + Album Art extraction.
- * - Zero-dependency, GPU-accelerated direct DOM rendering (0 React state re-renders).
+ * Core Logic:
+ * - Real-time FFT spectrum decomposition via Web Audio AnalyserNode.
+ * - Dynamic adaptive kick-drum threshold detection.
+ * - Harmonic multi-wave trajectory orbits (Lissajous & Perlin wave curves).
+ * - Multi-layer radial mesh gradients with bass-responsive radial expansion and energy glow.
  */
-
-// ============================================================================
-// 1. Classical 2D Perlin Noise Generator (Zero Dependencies)
-// ============================================================================
-class PerlinNoise {
-  private p: number[] = [];
-
-  constructor(seed = 42) {
-    this.reseed(seed);
-  }
-
-  reseed(seed: number) {
-    const permutation = [];
-    for (let i = 0; i < 256; i++) permutation[i] = i;
-
-    // Deterministic shuffle using seed
-    let s = seed % 2147483647;
-    if (s <= 0) s += 2147483646;
-    for (let i = 255; i > 0; i--) {
-      s = (s * 16807) % 2147483647;
-      const j = Math.floor((s / 2147483647) * (i + 1));
-      [permutation[i], permutation[j]] = [permutation[j]!, permutation[i]!];
-    }
-
-    this.p = new Array(512);
-    for (let i = 0; i < 512; i++) {
-      this.p[i] = permutation[i & 255]!;
-    }
-  }
-
-  private fade(t: number): number {
-    return t * t * t * (t * (t * 6 - 15) + 10);
-  }
-
-  private lerp(t: number, a: number, b: number): number {
-    return a + t * (b - a);
-  }
-
-  private grad(hash: number, x: number, y: number): number {
-    const h = hash & 3;
-    const u = h < 2 ? x : y;
-    const v = h < 2 ? y : x;
-    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
-  }
-
-  get(x: number, y: number): number {
-    const X = Math.floor(x) & 255;
-    const Y = Math.floor(y) & 255;
-
-    const xf = x - Math.floor(x);
-    const yf = y - Math.floor(y);
-
-    const u = this.fade(xf);
-    const v = this.fade(yf);
-
-    const aa = this.p[this.p[X]! + Y]!;
-    const ab = this.p[this.p[X]! + Y + 1]!;
-    const ba = this.p[this.p[X + 1]! + Y]!;
-    const bb = this.p[this.p[X + 1]! + Y + 1]!;
-
-    const x1 = this.lerp(u, this.grad(aa, xf, yf), this.grad(ba, xf - 1, yf));
-    const x2 = this.lerp(u, this.grad(ab, xf, yf - 1), this.grad(bb, xf - 1, yf - 1));
-
-    // Normalized to [-1, 1]
-    return this.lerp(v, x1, x2);
-  }
-}
-
-export const perlin = new PerlinNoise(1337);
-
-// ============================================================================
-// 2. StereoDrift Aesthetic Color Palettes
-// ============================================================================
-export interface DriftPalette {
-  name: string;
-  background: string;
-  primary: string;
-  secondary: string;
-  tertiary: string;
-}
-
-export type StereoDriftPaletteName = 'vapor' | 'analog' | 'euphoria' | 'emerald' | 'sunset' | 'noir';
-
-export const STEREODRIFT_PALETTES: Record<StereoDriftPaletteName, DriftPalette> = {
-  vapor: {
-    name: 'Vapor',
-    background: '#120726',
-    primary: '#f72585',
-    secondary: '#7909c3',
-    tertiary: '#42c7f0',
-  },
-  analog: {
-    name: 'Analog',
-    background: '#141224',
-    primary: '#20615B',
-    secondary: '#DECE9C',
-    tertiary: '#652EC7',
-  },
-  euphoria: {
-    name: 'Euphoria',
-    background: '#180a24',
-    primary: '#86BFE7',
-    secondary: '#B09060',
-    tertiary: '#f72585',
-  },
-  emerald: {
-    name: 'Emerald',
-    background: '#041209',
-    primary: '#10b981',
-    secondary: '#900C3F',
-    tertiary: '#FF7C60',
-  },
-  sunset: {
-    name: 'Sunset',
-    background: '#0b0826',
-    primary: '#f43f5e',
-    secondary: '#fb923c',
-    tertiary: '#818cf8',
-  },
-  noir: {
-    name: 'Noir',
-    background: '#09090b',
-    primary: '#71717a',
-    secondary: '#3f3f46',
-    tertiary: '#e4e4e7',
-  },
-};
-
-// ============================================================================
-// 3. StereoDrift Audio Dynamics Analyzer
-// ============================================================================
-export interface AudioDynamics {
-  bass: number;       // 0.0 - 1.0 (sub-bass & kick drum)
-  mid: number;        // 0.0 - 1.0 (vocals & melody)
-  treble: number;     // 0.0 - 1.0 (hi-hats & air)
-  beatHit: number;    // Transient strike spike (0.0 - 1.0, decayed smoothly)
-  overallEnergy: number;
-}
-
-export class StereoDriftAnalyzer {
-  private freqData = new Uint8Array(64);
+export class StereoDriftEngine {
+  private readonly freqData = new Uint8Array(64);
   private runningBassAvg = 0.2;
-  private beatHit = 0;
+  private beatPulse = 0;
 
-  analyze(analyser: AnalyserNode | null, isPlaying: boolean): AudioDynamics {
+  // Active interpolated palette
+  private currentColor1: StereoDriftColor = { r: 250, g: 35, b: 59 };
+  private currentColor2: StereoDriftColor = { r: 168, g: 85, b: 247 };
+  private currentColor3: StereoDriftColor = { r: 30, g: 45, b: 70 };
+
+  private targetColor1: StereoDriftColor = { r: 250, g: 35, b: 59 };
+  private targetColor2: StereoDriftColor = { r: 168, g: 85, b: 247 };
+  private targetColor3: StereoDriftColor = { r: 30, g: 45, b: 70 };
+
+  // Simulation time
+  private simTime = 0;
+
+  /** Update target colors from album art accent palette with smooth interpolation */
+  setAccent(accent: ArtworkAccent) {
+    this.targetColor1 = parseColor(accent.glow || accent.primary);
+    this.targetColor2 = parseColor(accent.secondary);
+    this.targetColor3 = parseColor(accent.darkBg || '#1e142b');
+  }
+
+  /** Read real-time frequency bands and detect beat drops */
+  analyzeAudio(isPlaying: boolean): StereoDriftAudioMetrics {
+    const analyser = getAudioAnalyser();
     if (!analyser || !isPlaying) {
-      this.beatHit *= 0.88;
+      this.beatPulse *= 0.88;
       return {
         bass: 0,
-        mid: 0,
+        mids: 0,
         treble: 0,
-        beatHit: this.beatHit,
-        overallEnergy: 0,
+        energy: 0,
+        beatPulse: this.beatPulse,
       };
     }
 
     analyser.getByteFrequencyData(this.freqData);
 
-    // 1. Sub-bass & Kick drum: bins 0 to 5 (~20 Hz - 140 Hz)
+    // 1. Sub-bass & kick drum: bins 0 to 6 (~20 Hz - 140 Hz)
     let bassSum = 0;
-    for (let i = 0; i < 6; i++) {
-      bassSum += this.freqData[i] ?? 0;
+    for (let i = 0; i < 7; i++) {
+      bassSum += this.freqData[i]!;
     }
-    const bass = bassSum / (6 * 255);
+    const bass = bassSum / (7 * 255);
 
-    // 2. Mid frequencies: bins 8 to 28 (~200 Hz - 800 Hz)
+    // 2. Mid frequencies: bins 10 to 35 (~250 Hz - 1 kHz)
     let midSum = 0;
-    for (let i = 8; i < 28; i++) {
-      midSum += this.freqData[i] ?? 0;
+    for (let i = 10; i < 35; i++) {
+      midSum += this.freqData[i]!;
     }
-    const mid = midSum / (20 * 255);
+    const mids = midSum / (25 * 255);
 
-    // 3. Treble frequencies: bins 30 to 55 (~1 kHz - 4.5 kHz)
+    // 3. Treble & presence: bins 36 to 58 (~1.5 kHz - 8 kHz)
     let trebleSum = 0;
-    for (let i = 30; i < 55; i++) {
-      trebleSum += this.freqData[i] ?? 0;
+    for (let i = 36; i < 58; i++) {
+      trebleSum += this.freqData[i]!;
     }
-    const treble = trebleSum / (25 * 255);
+    const treble = trebleSum / (22 * 255);
 
-    // 4. StereoDrift Transient Beat Spike Detection
+    const energy = bass * 0.5 + mids * 0.35 + treble * 0.15;
+
+    // Adaptive transient beat detection (StereoDrift kick strike)
     this.runningBassAvg = this.runningBassAvg * 0.94 + bass * 0.06;
-    if (bass > this.runningBassAvg * 1.28 && bass > 0.22) {
-      const delta = (bass - this.runningBassAvg) * 3.2;
-      this.beatHit = Math.max(this.beatHit, Math.min(1.0, delta));
+    if (bass > this.runningBassAvg * 1.22 && bass > 0.18) {
+      const delta = (bass - this.runningBassAvg) * 3.8;
+      this.beatPulse = Math.max(this.beatPulse, Math.min(1.0, delta));
     }
-    this.beatHit *= 0.86;
 
-    const overallEnergy = (bass * 0.5 + mid * 0.35 + treble * 0.15);
+    this.beatPulse *= 0.91; // smooth release envelope
 
     return {
       bass,
-      mid,
+      mids,
       treble,
-      beatHit: this.beatHit,
-      overallEnergy,
+      energy,
+      beatPulse: this.beatPulse,
     };
   }
-}
-
-// ============================================================================
-// 4. StereoDrift Perlin Gradient Coordinates Engine
-// ============================================================================
-export interface GradientSpot {
-  x: number; // percentage (0 - 100)
-  y: number; // percentage (0 - 100)
-  radius: number; // percentage radius
-  color: string;
-}
-
-export class StereoDriftGradientEngine {
-  private analyzer = new StereoDriftAnalyzer();
-  private time = 0;
 
   /**
-   * Computes the real-time audio-reactive gradient string based on StereoDrift logic.
+   * Render StereoDrift fluid reactive gradient to canvas
+   * @param ctx 2D Canvas rendering context
+   * @param width Canvas width
+   * @param height Canvas height
+   * @param dt Elapsed seconds
+   * @param isPlaying Audio play state
    */
-  update(
-    analyser: AnalyserNode | null,
-    isPlaying: boolean,
+  render(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
     dt: number,
-    colors: {
-      primary: string;
-      secondary: string;
-      accent?: string;
-      darkBg?: string;
-    },
-  ): {
-    background: string;
-    opacity: number;
-    scale: number;
-    dynamics: AudioDynamics;
-  } {
-    const dynamics = this.analyzer.analyze(analyser, isPlaying);
+    isPlaying: boolean,
+  ) {
+    const metrics = this.analyzeAudio(isPlaying);
 
-    // Time progresses with musical momentum: surges with kick and energy
-    const timeScale = isPlaying ? 0.35 + dynamics.bass * 0.6 + dynamics.beatHit * 0.4 : 0.08;
-    this.time += dt * timeScale;
+    // Smooth color palette morphing
+    this.currentColor1 = lerpColor(this.currentColor1, this.targetColor1, dt * 2.5);
+    this.currentColor2 = lerpColor(this.currentColor2, this.targetColor2, dt * 2.5);
+    this.currentColor3 = lerpColor(this.currentColor3, this.targetColor3, dt * 2.5);
 
-    // Perlin noise continuous flow coordinates
-    const t = this.time;
+    // Audio-reactive momentum: faster motion during drops and energetic sections
+    const speed = isPlaying ? 0.35 + metrics.bass * 0.45 + metrics.beatPulse * 0.3 : 0.15;
+    this.simTime += dt * speed;
+    const t = this.simTime;
 
-    // Spot 1 (Primary / Kick bloom) - centered with bass expansion
-    const p1X = 50 + perlin.get(t * 0.4, 0.5) * (18 + dynamics.bass * 16);
-    const p1Y = 40 + perlin.get(0.5, t * 0.4) * (16 + dynamics.bass * 14);
-    const r1 = 45 + dynamics.bass * 25 + dynamics.beatHit * 22;
+    // Clear background
+    ctx.fillStyle = '#08090d';
+    ctx.fillRect(0, 0, width, height);
 
-    // Spot 2 (Secondary / Mid harmony flow) - top right / counter swirl
-    const p2X = 75 + perlin.get(t * 0.35 + 5, 2.5) * (20 + dynamics.mid * 15);
-    const p2Y = 25 + perlin.get(2.5, t * 0.35 + 5) * (18 + dynamics.mid * 14);
-    const r2 = 40 + dynamics.mid * 20;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
 
-    // Spot 3 (Tertiary / Low-end base) - bottom left
-    const p3X = 25 + perlin.get(t * 0.3 + 10, 7.5) * (16 + dynamics.treble * 12);
-    const p3Y = 75 + perlin.get(7.5, t * 0.3 + 10) * (16 + dynamics.treble * 12);
-    const r3 = 45 + dynamics.treble * 15;
+    // StereoDrift Harmonic Orbs Configuration
+    // Orb 1: Primary glow orb (top-right drifting center)
+    const orb1X = width * 0.65 + Math.sin(t * 0.8) * width * 0.18 + Math.cos(t * 0.5) * width * 0.05;
+    const orb1Y = height * 0.3 + Math.cos(t * 0.7) * height * 0.16 + metrics.beatPulse * 15;
+    const orb1Radius =
+      Math.min(width, height) * (0.45 + metrics.bass * 0.22 + metrics.beatPulse * 0.28);
+    const alpha1 = Math.min(0.85, 0.42 + metrics.energy * 0.35 + metrics.beatPulse * 0.18);
 
-    // Spot 4 (Center ambience)
-    const p4X = 50 + perlin.get(t * 0.2 + 20, 15) * 12;
-    const p4Y = 60 + perlin.get(15, t * 0.2 + 20) * 12;
-    const r4 = 65 + dynamics.overallEnergy * 15;
+    const grad1 = ctx.createRadialGradient(orb1X, orb1Y, 0, orb1X, orb1Y, orb1Radius);
+    grad1.addColorStop(
+      0,
+      `rgba(${this.currentColor1.r}, ${this.currentColor1.g}, ${this.currentColor1.b}, ${alpha1.toFixed(3)})`,
+    );
+    grad1.addColorStop(
+      0.65,
+      `rgba(${this.currentColor1.r}, ${this.currentColor1.g}, ${this.currentColor1.b}, ${(alpha1 * 0.35).toFixed(3)})`,
+    );
+    grad1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad1;
+    ctx.beginPath();
+    ctx.arc(orb1X, orb1Y, orb1Radius, 0, Math.PI * 2);
+    ctx.fill();
 
-    const c1 = colors.primary;
-    const c2 = colors.secondary;
-    const c3 = colors.accent ?? colors.primary;
-    const c4 = colors.darkBg ?? '#0a0a0f';
+    // Orb 2: Secondary wave orb (bottom-left harmonic sweep)
+    const orb2X = width * 0.28 + Math.cos(t * 0.65) * width * 0.16 - Math.sin(t * 0.3) * width * 0.06;
+    const orb2Y = height * 0.72 + Math.sin(t * 0.85) * height * 0.15 - metrics.beatPulse * 12;
+    const orb2Radius =
+      Math.min(width, height) * (0.5 + metrics.mids * 0.25 + metrics.beatPulse * 0.2);
+    const alpha2 = Math.min(0.75, 0.36 + metrics.mids * 0.28 + metrics.beatPulse * 0.15);
 
-    const background = `
-      radial-gradient(circle at ${p1X.toFixed(1)}% ${p1Y.toFixed(1)}%, ${c1} 0%, transparent ${r1.toFixed(1)}%),
-      radial-gradient(circle at ${p2X.toFixed(1)}% ${p2Y.toFixed(1)}%, ${c2} 0%, transparent ${r2.toFixed(1)}%),
-      radial-gradient(circle at ${p3X.toFixed(1)}% ${p3Y.toFixed(1)}%, ${c3} 0%, transparent ${r3.toFixed(1)}%),
-      radial-gradient(circle at ${p4X.toFixed(1)}% ${p4Y.toFixed(1)}%, ${c4} 0%, transparent ${r4.toFixed(1)}%)
-    `;
+    const grad2 = ctx.createRadialGradient(orb2X, orb2Y, 0, orb2X, orb2Y, orb2Radius);
+    grad2.addColorStop(
+      0,
+      `rgba(${this.currentColor2.r}, ${this.currentColor2.g}, ${this.currentColor2.b}, ${alpha2.toFixed(3)})`,
+    );
+    grad2.addColorStop(
+      0.6,
+      `rgba(${this.currentColor2.r}, ${this.currentColor2.g}, ${this.currentColor2.b}, ${(alpha2 * 0.3).toFixed(3)})`,
+    );
+    grad2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad2;
+    ctx.beginPath();
+    ctx.arc(orb2X, orb2Y, orb2Radius, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Dynamic opacity & scale surge on beat
-    const baseOpacity = isPlaying ? 0.42 : 0.22;
-    const opacity = baseOpacity + dynamics.bass * 0.25 + dynamics.beatHit * 0.18;
-    const scale = 1.0 + dynamics.beatHit * 0.05 + dynamics.bass * 0.02;
+    // Orb 3: Deep atmospheric bass anchor (center/bottom pulse)
+    const orb3X = width * 0.48 + Math.sin(t * 0.45) * width * 0.12;
+    const orb3Y = height * 0.52 + Math.cos(t * 0.55) * height * 0.14;
+    const orb3Radius =
+      Math.min(width, height) * (0.65 + metrics.bass * 0.35 + metrics.beatPulse * 0.3);
+    const alpha3 = Math.min(0.65, 0.28 + metrics.bass * 0.3);
 
-    return {
-      background,
-      opacity: Math.min(0.95, opacity),
-      scale,
-      dynamics,
-    };
+    const grad3 = ctx.createRadialGradient(orb3X, orb3Y, 0, orb3X, orb3Y, orb3Radius);
+    grad3.addColorStop(
+      0,
+      `rgba(${this.currentColor3.r}, ${this.currentColor3.g}, ${this.currentColor3.b}, ${alpha3.toFixed(3)})`,
+    );
+    grad3.addColorStop(
+      0.7,
+      `rgba(${this.currentColor3.r}, ${this.currentColor3.g}, ${this.currentColor3.b}, ${(alpha3 * 0.2).toFixed(3)})`,
+    );
+    grad3.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad3;
+    ctx.beginPath();
+    ctx.arc(orb3X, orb3Y, orb3Radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Orb 4: High-frequency shimmer highlight (reactive to vocals & cymbals)
+    if (metrics.treble > 0.08 || metrics.beatPulse > 0.1) {
+      const orb4X = width * 0.5 + Math.cos(t * 1.1) * width * 0.22;
+      const orb4Y = height * 0.4 + Math.sin(t * 1.2) * height * 0.18;
+      const orb4Radius = Math.min(width, height) * (0.28 + metrics.treble * 0.2);
+      const alpha4 = Math.min(0.5, metrics.treble * 0.4 + metrics.beatPulse * 0.15);
+
+      const grad4 = ctx.createRadialGradient(orb4X, orb4Y, 0, orb4X, orb4Y, orb4Radius);
+      grad4.addColorStop(0, `rgba(255, 255, 255, ${alpha4.toFixed(3)})`);
+      grad4.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = grad4;
+      ctx.beginPath();
+      ctx.arc(orb4X, orb4Y, orb4Radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 }
-
-
-
