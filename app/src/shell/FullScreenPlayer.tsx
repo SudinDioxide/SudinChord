@@ -183,18 +183,36 @@ function ArtworkStage({
 
             {/* Album Jacket Sleeve (Moves slightly left when vinyl comes out) */}
             <div
-              className={`relative z-10 size-[94%] rounded-[12px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#111] transition-transform duration-600 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${
+              className={`relative z-10 size-[94%] rounded-[12px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#141418] transition-transform duration-600 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${
                 vinylMode ? '-translate-x-[20%]' : 'translate-x-0'
               }`}
             >
-              {artworkUrl && (
+              {artworkUrl ? (
                 <>
+                  {/* Subtle blurred underlayer in case of loading or aspect difference */}
+                  <img
+                    key={`under-${artworkUrl}`}
+                    className="absolute inset-0 size-full object-cover scale-110 blur-xl opacity-50 select-none pointer-events-none"
+                    src={artworkUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    decoding="async"
+                  />
+
                   {/* Main Cover Artwork */}
                   <img
                     key={artworkUrl}
-                    className="size-full object-cover select-none pointer-events-none"
+                    className="relative size-full object-cover select-none pointer-events-none transition-opacity duration-300"
                     src={sizedArtwork(artworkUrl, 600)}
-                    alt="Album Cover"
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
+                    decoding="async"
+                    onError={(e) => {
+                      if (e.currentTarget.src !== artworkUrl) {
+                        e.currentTarget.src = artworkUrl;
+                      }
+                    }}
                     draggable={false}
                   />
 
@@ -217,6 +235,11 @@ function ArtworkStage({
                     />
                   )}
                 </>
+              ) : (
+                <div className="size-full flex flex-col items-center justify-center bg-gradient-to-tr from-[#16161c] to-[#252636] text-white/30">
+                  <Disc3 size={56} className="opacity-40 mb-2" />
+                  <span className="text-[10px] font-mono tracking-widest uppercase text-white/40">SudinChord</span>
+                </div>
               )}
 
               {/* Apple Motion Artwork (if available and vinyl is not out) */}
@@ -483,14 +506,7 @@ export function FullScreenPlayer() {
         >
           <SlidersHorizontal size={18} strokeWidth={2.2} />
         </button>
-        <button
-          className={chromeButton}
-          aria-label="Toggle Vinyl Turntable Mode"
-          title={`Vinyl Turntable: ${vinylMode ? 'ON' : 'OFF'}`}
-          onClick={() => setVinylMode(!vinylMode)}
-        >
-          <Disc3 size={18} strokeWidth={2.2} className={vinylMode ? 'text-[#fa233b] animate-spin' : ''} />
-        </button>
+
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
           className={chromeButton}

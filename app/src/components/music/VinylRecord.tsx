@@ -76,7 +76,14 @@ export function VinylRecord({ artworkUrl, playing, className, size }: VinylRecor
             {artSrc ? (
               <img
                 src={artSrc}
-                alt="Vinyl Label"
+                alt=""
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  if (artworkUrl && e.currentTarget.src !== artworkUrl) {
+                    e.currentTarget.src = artworkUrl;
+                  }
+                }}
                 className="size-full object-cover scale-105 pointer-events-none"
                 decoding="async"
               />
