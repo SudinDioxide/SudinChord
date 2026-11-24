@@ -1,4 +1,3 @@
-import { useRef, useEffect, useState } from 'react';
 import { Disc3 } from 'lucide-react';
 import { sizedArtwork } from '@/lib/artwork';
 
@@ -10,49 +9,16 @@ interface VinylRecordProps {
 }
 
 /**
- * Audiophile Turntable & High-Fidelity Vinyl Record.
- * Features:
- * - 33⅓ RPM rotational physics with smooth spin-up / deceleration inertia.
- * - Multi-layer micro-groove texture with run-in, body, and dead wax run-out grooves.
- * - Dual opposing butterfly specular gloss reflection with subtle diffraction iridescence.
- * - Technics SL-1200 style precision aluminum platter with strobe dots.
- * - Spindle with brass ring bushing and album label typography.
+ * High-Fidelity 33⅓ RPM Vinyl Record Component.
+ * Styled after itsweliton's CodePen (MWMrxaw) with:
+ * - 180g heavy-pressed vinyl disc with outer rim and edge bevel.
+ * - Multi-layer concentric sound track grooves and spacing bands.
+ * - Stationary dual-cone specular light sheen (room light reflection) with secondary cross-angle gloss.
+ * - Smooth hardware-accelerated GPU 33⅓ RPM rotation (pauses & resumes seamlessly).
+ * - Center album artwork label with vintage rim ring and bevel-highlighted spindle hole.
  */
 export function VinylRecord({ artworkUrl, playing, className, size }: VinylRecordProps) {
-  const artSrc = artworkUrl ? sizedArtwork(artworkUrl, 300) : null;
-  const rotationRef = useRef(0);
-  const discRef = useRef<HTMLDivElement>(null);
-
-  // Smooth rotational inertia on pause/play using direct DOM transform (zero React re-renders)
-  useEffect(() => {
-    let animId: number;
-    let lastTime = performance.now();
-    let speed = playing ? 1 : 0; // target angular speed (1 = full 33 1/3 rpm = ~200 deg/sec)
-
-    const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - lastTime) / 1000);
-      lastTime = now;
-
-      const targetSpeed = playing ? 1 : 0;
-      // Exponential smoothing for motor spin-up / spindown friction
-      const lerpFactor = playing ? 3.0 : 1.8;
-      speed += (targetSpeed - speed) * Math.min(1, dt * lerpFactor);
-
-      if (speed > 0.001) {
-        // 33.33 RPM = 0.555 revolutions/sec = 200 deg/sec
-        rotationRef.current = (rotationRef.current + speed * 200 * dt) % 360;
-        if (discRef.current) {
-          discRef.current.style.transform = `rotate(${rotationRef.current.toFixed(2)}deg)`;
-        }
-        animId = requestAnimationFrame(tick);
-      } else {
-        speed = 0;
-      }
-    };
-
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [playing]);
+  const artSrc = artworkUrl ? sizedArtwork(artworkUrl, 400) : null;
 
   return (
     <div
@@ -62,98 +28,131 @@ export function VinylRecord({ artworkUrl, playing, className, size }: VinylRecor
         aspectRatio: '1 / 1',
       }}
     >
-      {/* Precision Machined Aluminum Platter (Technics-style strobe dots & rim) */}
+      {/* 1. Main Vinyl Record Body (Deep vinyl black with outer rim bevel & depth shadow) */}
       <div
-        className="absolute inset-[-4%] rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_0_2px_rgba(255,255,255,0.08)] pointer-events-none"
+        className="relative size-full rounded-full overflow-hidden flex items-center justify-center shadow-[0_15px_45px_rgba(0,0,0,0.85),0_0_0_2px_rgba(255,255,255,0.08),inset_0_0_0_4px_#0a0a0a]"
         style={{
-          background: `
-            radial-gradient(circle, transparent 94%, #28282e 95%, #18181c 97%, #3a3a42 99%, #141416 100%),
-            repeating-conic-gradient(from 0deg, #2a2a30 0deg, #2a2a30 1.5deg, #151518 1.5deg, #151518 3deg)
-          `,
-        }}
-      />
-
-      {/* Main Vinyl Record Disc */}
-      <div
-        ref={discRef}
-        className="relative size-full rounded-full shadow-[0_15px_35px_rgba(0,0,0,0.85),inset_0_0_8px_rgba(255,255,255,0.1)] overflow-hidden flex items-center justify-center will-change-transform"
-        style={{
-          transform: `rotate(${rotationRef.current.toFixed(2)}deg)`,
-          background: '#0c0c0e',
+          background: 'radial-gradient(circle at center, #0c0c0c 0%, #161616 55%, #050505 100%)',
         }}
       >
-        {/* 1. Realistic Repeating Micro-Groove Layers */}
+        {/* 2. Rotating Layer (Grooves, Track Separators, and Center Label) */}
         <div
-          className="pointer-events-none absolute inset-0 rounded-full"
+          className="relative size-full rounded-full flex items-center justify-center will-change-transform"
           style={{
-            background: `
-              radial-gradient(circle at center, transparent 38%, rgba(0,0,0,0.92) 39%),
-              repeating-radial-gradient(circle at center, #0b0b0d 0px, #0b0b0d 1.5px, #1a1a1e 2px, #08080a 3px, #18181c 4px)
-            `,
+            animation: 'sudin-vinyl-spin 2.2s linear infinite',
+            animationPlayState: playing ? 'running' : 'paused',
           }}
-        />
+        >
+          {/* Micro-Grooves and concentric sound tracks */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-full"
+            style={{
+              background: `
+                /* Lead-out runout groove ring */
+                radial-gradient(circle at center, transparent 0, transparent 20%, rgba(255,255,255,0.05) 21%, transparent 22%),
+                /* Track gap spacer 1 */
+                radial-gradient(circle at center, transparent 0, transparent 30%, rgba(255,255,255,0.07) 31%, transparent 32%),
+                /* Track gap spacer 2 */
+                radial-gradient(circle at center, transparent 0, transparent 40%, rgba(255,255,255,0.07) 41%, transparent 42%),
+                /* Dense micro-grooves */
+                repeating-radial-gradient(
+                  circle at center,
+                  transparent 0,
+                  transparent 2px,
+                  rgba(255, 255, 255, 0.04) 3px,
+                  rgba(0, 0, 0, 0.5) 4px
+                )
+              `,
+            }}
+          />
 
-        {/* 2. Audio Track Spacing Bands (Visual divisions between songs on the LP) */}
-        <div className="pointer-events-none absolute inset-[12%] rounded-full border border-black/80 shadow-[inset_0_0_3px_rgba(255,255,255,0.04)]" />
-        <div className="pointer-events-none absolute inset-[20%] rounded-full border border-black/80 shadow-[inset_0_0_3px_rgba(255,255,255,0.04)]" />
-        <div className="pointer-events-none absolute inset-[27%] rounded-full border border-black/80 shadow-[inset_0_0_3px_rgba(255,255,255,0.04)]" />
+          {/* Outer Run-in Groove & Inner Run-out (Dead Wax) */}
+          <div className="pointer-events-none absolute inset-2 rounded-full border border-white/[0.08]" />
+          <div className="pointer-events-none absolute inset-4 rounded-full border border-white/[0.04]" />
+          <div className="pointer-events-none absolute inset-[36%] rounded-full border border-white/[0.06]" />
 
-        {/* 3. Outer Run-in Groove & Inner Run-out (Dead Wax Area) */}
-        <div className="pointer-events-none absolute inset-1.5 rounded-full border border-white/[0.06]" />
-        <div className="pointer-events-none absolute inset-3 rounded-full border border-white/[0.04]" />
-        <div className="pointer-events-none absolute inset-[34%] rounded-full border border-white/[0.05]" />
+          {/* Center Record Label (35% diameter) */}
+          <div className="relative size-[35%] rounded-full overflow-hidden shadow-[0_0_0_4px_#0c0c0c,0_0_0_6px_rgba(255,255,255,0.08),0_0_15px_rgba(0,0,0,0.85)] flex items-center justify-center bg-[#121216]">
+            {artSrc ? (
+              <img
+                src={artSrc}
+                alt="Vinyl Label"
+                className="size-full object-cover scale-105 pointer-events-none"
+                decoding="async"
+              />
+            ) : (
+              <div className="size-full flex flex-col items-center justify-center bg-gradient-to-tr from-[#1b1c24] to-[#2a2b38] text-center p-2">
+                <Disc3 size={32} className="text-white/40 mb-1" />
+                <span className="text-[8px] font-mono tracking-widest uppercase text-white/60">SudinChord</span>
+                <span className="text-[7px] font-mono text-white/40">33⅓ RPM</span>
+              </div>
+            )}
 
-        {/* 4. Dual Conical Butterfly Specular Gloss with Subtle Iridescent Sheen */}
+            {/* Label Rim Vintage Ring */}
+            <div className="pointer-events-none absolute inset-1.5 rounded-full border border-white/25 opacity-70" />
+
+            {/* Label Typography Badge (SIDE A / 33⅓ RPM) */}
+            <div className="pointer-events-none absolute bottom-3 flex flex-col items-center opacity-90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              <span className="text-[7px] font-bold tracking-widest text-white/90">SIDE A</span>
+              <span className="text-[6px] font-mono text-white/70">33⅓ RPM</span>
+            </div>
+
+            {/* Center Spindle Hole with metallic bevel highlights */}
+            <div className="absolute size-5 rounded-full bg-[#080808] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-1px_2px_rgba(0,0,0,0.95),0_0_0_1px_#000] flex items-center justify-center z-10">
+              <div className="size-1.5 rounded-full bg-black/90 shadow-inner" />
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Stationary Specular Light Sheen (Room lighting reflection overlay) */}
+        {/* Real-world vinyl reflection stays fixed to the room light while the disc rotates beneath! */}
         <div
-          className="pointer-events-none absolute inset-0 rounded-full mix-blend-screen opacity-70"
+          className="pointer-events-none absolute inset-0 rounded-full mix-blend-screen opacity-90 z-20"
           style={{
             background: `
               conic-gradient(
-                from 30deg,
-                rgba(255,255,255,0.02) 0deg,
-                rgba(255,255,255,0.18) 45deg,
-                rgba(240,245,255,0.28) 60deg,
-                rgba(255,255,255,0.04) 90deg,
-                transparent 120deg,
-                rgba(255,255,255,0.02) 210deg,
-                rgba(255,255,255,0.18) 225deg,
-                rgba(240,245,255,0.28) 240deg,
-                rgba(255,255,255,0.04) 270deg,
-                transparent 300deg,
-                rgba(255,255,255,0.02) 360deg
+                from 40deg,
+                transparent 0deg,
+                rgba(255, 255, 255, 0.18) 35deg,
+                transparent 70deg,
+                transparent 180deg,
+                rgba(255, 255, 255, 0.18) 215deg,
+                transparent 250deg
               )
             `,
           }}
         />
 
-        {/* 5. Center Circular Record Label (37% diameter with authentic LP typography) */}
-        <div className="relative size-[37%] rounded-full overflow-hidden shadow-[0_0_18px_rgba(0,0,0,0.95),inset_0_0_5px_rgba(0,0,0,0.8)] flex items-center justify-center bg-[#121216] border-2 border-white/20">
-          {artSrc ? (
-            <img
-              src={artSrc}
-              alt="Vinyl Label"
-              className="size-full object-cover scale-110 pointer-events-none"
-              decoding="async"
-            />
-          ) : (
-            <div className="size-full flex flex-col items-center justify-center bg-gradient-to-tr from-[#1b1c24] to-[#2a2b38] text-center p-2">
-              <Disc3 size={32} className="text-white/40 mb-1" />
-              <span className="text-[8px] font-mono tracking-widest uppercase text-white/60">SudinChord</span>
-              <span className="text-[7px] font-mono text-white/40">33⅓ RPM</span>
-            </div>
-          )}
-
-          {/* Label Rim Vintage Ring */}
-          <div className="pointer-events-none absolute inset-1.5 rounded-full border border-white/25 opacity-70" />
-
-          {/* Label Center Spindle Hole with Brass Bushing */}
-          <div className="absolute size-5 rounded-full bg-gradient-to-b from-[#8a7638] via-[#e5c158] to-[#6d5a22] p-[1.5px] shadow-[0_2px_6px_rgba(0,0,0,0.9)] flex items-center justify-center">
-            <div className="size-full rounded-full bg-[#0a0a0d] shadow-[inset_0_2px_4px_rgba(0,0,0,0.95)] flex items-center justify-center">
-              <div className="size-1 rounded-full bg-black" />
-            </div>
-          </div>
-        </div>
+        {/* Secondary softer cross-angle reflection */}
+        <div
+          className="pointer-events-none absolute inset-0 rounded-full mix-blend-screen opacity-70 z-20"
+          style={{
+            background: `
+              conic-gradient(
+                from 130deg,
+                transparent 0deg,
+                rgba(255, 255, 255, 0.10) 25deg,
+                transparent 50deg,
+                transparent 180deg,
+                rgba(255, 255, 255, 0.10) 205deg,
+                transparent 230deg
+              )
+            `,
+          }}
+        />
       </div>
+
+      {/* Global CSS Keyframes for GPU-accelerated rotation */}
+      <style>{`
+        @keyframes sudin-vinyl-spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }
