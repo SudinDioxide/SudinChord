@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { PictureInPicture2 } from 'lucide-react';
+import { PictureInPicture2, SlidersHorizontal, Smartphone } from 'lucide-react';
+import { useAudioFx } from '@/state/audioFx';
+import { KaraokeButton } from '@/components/audio/KaraokeControl';
+import { useRemoteModal } from '@/components/network/RemoteConnectModal';
 import { SleepTimerButton } from '@/components/music/SleepTimerButton';
 import { useSleepTimer } from '@/state/sleepTimer';
 import {
@@ -122,6 +125,23 @@ export function PlayerBar() {
             <PictureInPicture2 size={18} strokeWidth={2.2} />
           </button>
           {isSleepActive && <SleepTimerButton className={fading} placement="above-end" />}
+          <button
+            className={fading}
+            aria-label="Audio Equalizer & DSP (Ctrl+Alt+E)"
+            title="Audio Equalizer & DSP (Ctrl+Alt+E)"
+            onClick={() => useAudioFx.getState().setModalOpen(true)}
+          >
+            <SlidersHorizontal size={17} strokeWidth={2.2} />
+          </button>
+          <KaraokeButton className={fading} />
+          <button
+            className={fading}
+            aria-label="Phone Remote Control"
+            title="Connect Phone Remote (Wi-Fi QR)"
+            onClick={() => useRemoteModal.getState().open()}
+          >
+            <Smartphone size={17} strokeWidth={2.2} />
+          </button>
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} className={action} />
         </div>
       </div>

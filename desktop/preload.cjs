@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('electronPlatform', {
     ipcRenderer.on('app:update-downloaded', handler);
     return () => ipcRenderer.removeListener('app:update-downloaded', handler);
   },
+  // SudinChord Connect Phone Remote
+  getRemoteInfo: () => ipcRenderer.invoke('remote:get-info'),
 });
 
 // 2. Built-in Native Bridge Relay

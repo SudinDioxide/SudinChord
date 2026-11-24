@@ -1,8 +1,10 @@
 import { AutoDJ, type AutomixHost, type AutoDJSnapshot } from './engine/autodj';
 import { Deck } from './engine/deck';
 import { LoopDeck } from './engine/loopDeck';
+import { VocalRemoverNode } from './engine/vocalRemover';
 import type { TransitionPlan } from './engine/transition-scheduler';
-import { registerGraphForFx, EQ_FREQUENCIES } from '@/state/audioFx';
+import { registerGraphForFx, EQ_FREQUENCIES, EQ_Q_VALUES } from '@/state/audioFx';
+import { registerVocalRemover } from '@/state/karaoke';
 
 export type { AutomixHost, AutoDJSnapshot, TransitionPlan };
 export type { MixWindow } from './engine/autodj';
@@ -16,6 +18,7 @@ export interface AutomixGraph {
   ctx: AudioContext;
   /** The user's volume and mute. */
   master: GainNode;
+  preamp: GainNode;
   decks: Deck[];
   dj: AutoDJ;
   analyser: AnalyserNode;
@@ -37,8 +40,10 @@ export function createAutomixGraph(
   const ctx = new AudioContext({ latencyHint: 'playback' });
   void ctx.resume();
   const master = new GainNode(ctx, { gain: 1 });
+  const vocalRemover = new VocalRemoverNode(ctx);
+  const preamp = new GainNode(ctx, { gain: 1 });
 
-  // 10-Band Graphic Equalizer Filter Chain
+  // 10-Band Graphic Equalizer Filter Chain with tuned musical Q factors
   const eqFilters = EQ_FREQUENCIES.map((freq, i) => {
     const filter = new BiquadFilterNode(ctx);
     filter.frequency.value = freq;
@@ -49,7 +54,7 @@ export function createAutomixGraph(
       filter.type = 'highshelf';
     } else {
       filter.type = 'peaking';
-      filter.Q.value = 1.4;
+      filter.Q.value = EQ_Q_VALUES[i] ?? 1.4;
     }
     return filter;
   });
@@ -68,8 +73,12 @@ export function createAutomixGraph(
     smoothingTimeConstant: 0.82,
   });
 
-  // Connect Audio Chain: master -> EQ[0..9] -> compressor -> analyser -> destination
+  // Connect Audio Chain: master -> vocalRemover -> preamp -> EQ[0..9] -> compressor -> analyser -> destination
   let lastNode: AudioNode = master;
+  lastNode.connect(vocalRemover.input);
+  lastNode = vocalRemover.output;
+  lastNode.connect(preamp);
+  lastNode = preamp;
   for (const filter of eqFilters) {
     lastNode.connect(filter);
     lastNode = filter;
@@ -78,13 +87,14 @@ export function createAutomixGraph(
   compressor.connect(analyser);
   analyser.connect(ctx.destination);
 
-  // Sync with user's saved audio FX settings
-  registerGraphForFx({ ctx, eqFilters, compressor });
+  // Sync with user's saved audio FX & karaoke settings
+  registerGraphForFx({ ctx, preamp, eqFilters, compressor });
+  registerVocalRemover(vocalRemover);
 
   const decks = audios.map((audio, n) => new Deck(n === 0 ? 'A' : 'B', ctx, audio, master));
   // the loop mix's stretch decks (AutoMix's own), built the first time a loop mix is prepared
   let loops: Promise<[LoopDeck, LoopDeck]> | null = null;
   const loopDecks = () => (loops ??= Promise.all([LoopDeck.create(ctx, master), LoopDeck.create(ctx, master)]));
   const dj = new AutoDJ({ ctx, loopDecks, ...host(decks) }, onUpdate);
-  return { ctx, master, decks, dj, analyser, eqFilters, compressor };
+  return { ctx, master, preamp, decks, dj, analyser, eqFilters, compressor };
 }

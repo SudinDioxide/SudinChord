@@ -1,4 +1,4 @@
-import { ListMusic, Plus, Settings, Trash2 } from 'lucide-react';
+import { BarChart2, ListMusic, Plus, Settings, Trash2 } from 'lucide-react';
 import { NavHistoryButtons } from '@/components/NavHistoryButtons';
 import { useLocation, useNavigate } from 'react-router';
 import { MdOutlineExtension } from 'react-icons/md';
@@ -35,10 +35,15 @@ interface NavItem {
   Icon: (props: NavIconProps) => React.ReactNode;
 }
 
+const StatsIcon = ({ size = 24, className }: NavIconProps) => (
+  <BarChart2 size={size} className={className} strokeWidth={2.2} />
+);
+
 const PRIMARY: NavItem[] = [
   { to: '/search', label: 'Search', Icon: SearchIcon },
   { to: '/home', label: 'Home', Icon: HomeIcon },
   { to: '/new', label: 'New', Icon: NewIcon },
+  { to: '/stats', label: 'Listening Stats', Icon: StatsIcon },
   { to: '/local', label: 'Local Files', Icon: LocalFilesIcon },
 ];
 

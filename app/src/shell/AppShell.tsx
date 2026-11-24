@@ -20,6 +20,7 @@ import { Sidebar } from './Sidebar';
 import { AmbientAppBackdrop } from './AmbientAppBackdrop';
 import { NewPlaylistModal } from '@/components/music/NewPlaylistModal';
 import { EqualizerModal } from '@/components/audio/EqualizerModal';
+import { RemoteConnectModal } from '@/components/network/RemoteConnectModal';
 import { Music2 } from 'lucide-react';
 import { localTracksManager } from '@/playback/local/localTracks';
 import { playList } from '@/components/music/play';
@@ -198,6 +199,7 @@ export function AppShell() {
         </Suspense>
       )}
       <EqualizerModal />
+      <RemoteConnectModal />
     </div>
   );
 }

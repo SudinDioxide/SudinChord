@@ -1,5 +1,8 @@
-import { Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import { Disc3, Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useAudioFx } from '@/state/audioFx';
+import { KaraokeButton } from '@/components/audio/KaraokeControl';
+import { VinylRecord, Tonearm } from '@/components/music/VinylRecord';
+import { AmbientGlow } from '@/components/visual/AmbientGlow';
 import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
@@ -95,6 +98,7 @@ function ArtworkStage({
   theater,
   motion,
   accent,
+  vinylMode,
 }: {
   artworkUrl: string | null;
   playing: boolean;
@@ -103,6 +107,7 @@ function ArtworkStage({
   theater: boolean;
   motion: AppleMotion | null;
   accent: ArtworkAccent;
+  vinylMode?: boolean;
 }) {
   const [tilt, setTilt] = useState({ rx: 0, ry: 0, glareX: 50, glareY: 50, hovered: false });
 
@@ -137,66 +142,97 @@ function ArtworkStage({
           transformStyle: 'preserve-3d',
         }}
       >
-        {artworkUrl && (
+        {!video && vinylMode ? (
+          <div className="relative size-full flex items-center justify-center">
+            {/* Spinning Vinyl Record with grooves and center label */}
+            <div
+              className={`absolute size-[92%] transition-all duration-700 ease-[cubic-bezier(0.2,1,0.3,1)] ${
+                playing ? 'translate-x-[26%] scale-100' : 'translate-x-[8%] scale-98'
+              }`}
+            >
+              <VinylRecord artworkUrl={artworkUrl} playing={playing} />
+            </div>
+
+            {/* Tonearm */}
+            <Tonearm playing={playing} className={playing ? 'translate-x-[26%]' : 'translate-x-[8%]'} />
+
+            {/* Album Jacket Sleeve */}
+            <div className="relative z-10 size-[92%] -translate-x-[20%] rounded-[12px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-black">
+              {artworkUrl && (
+                <img
+                  src={sizedArtwork(artworkUrl, 600)}
+                  alt="Album Jacket"
+                  className="size-full object-cover"
+                />
+              )}
+              {/* Sleeve inner depth edge on the right */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-3 bg-gradient-to-l from-black/80 to-transparent" />
+            </div>
+          </div>
+        ) : (
           <>
-            {/* Deep Ambient Radiosity Glow */}
-            <img
-              key={`deep-glow-${artworkUrl}`}
-              className={`${artworkLayer} -z-2 translate-y-4 scale-102 blur-[48px] saturate-[2.4] data-loaded:opacity-75`}
-              src={sizedArtwork(artworkUrl, 80)}
-              alt=""
-              referrerPolicy="no-referrer"
-              decoding="async"
-              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-            />
+            {artworkUrl && (
+              <>
+                {/* Deep Ambient Radiosity Glow */}
+                <img
+                  key={`deep-glow-${artworkUrl}`}
+                  className={`${artworkLayer} -z-2 translate-y-4 scale-102 blur-[48px] saturate-[2.4] data-loaded:opacity-75`}
+                  src={sizedArtwork(artworkUrl, 80)}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  decoding="async"
+                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+                />
 
-            {/* Core Glow */}
-            <img
-              key={`core-glow-${artworkUrl}`}
-              className={`${artworkLayer} -z-1 translate-y-2 scale-98 blur-[18px] saturate-200 data-loaded:opacity-50`}
-              src={sizedArtwork(artworkUrl, 120)}
-              alt=""
-              referrerPolicy="no-referrer"
-              decoding="async"
-              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-            />
+                {/* Core Glow */}
+                <img
+                  key={`core-glow-${artworkUrl}`}
+                  className={`${artworkLayer} -z-1 translate-y-2 scale-98 blur-[18px] saturate-200 data-loaded:opacity-50`}
+                  src={sizedArtwork(artworkUrl, 120)}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  decoding="async"
+                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+                />
 
-            {/* Main Cover Artwork */}
-            <img
-              key={artworkUrl}
-              className={`${artworkLayer} bg-[#ffffff12] shadow-[0_16px_40px_rgba(0,0,0,0.45)] data-loaded:opacity-100`}
-              style={{
-                boxShadow: `0 18px 45px rgba(0,0,0,0.45), 0 0 45px ${accent.glow}`,
-              }}
-              src={sizedArtwork(artworkUrl, 600)}
-              alt=""
-              referrerPolicy="no-referrer"
-              decoding="async"
-              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
-            />
+                {/* Main Cover Artwork */}
+                <img
+                  key={artworkUrl}
+                  className={`${artworkLayer} bg-[#ffffff12] shadow-[0_16px_40px_rgba(0,0,0,0.45)] data-loaded:opacity-100`}
+                  style={{
+                    boxShadow: `0 18px 45px rgba(0,0,0,0.45), 0 0 45px ${accent.glow}`,
+                  }}
+                  src={sizedArtwork(artworkUrl, 600)}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  decoding="async"
+                  onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
+                />
 
-            {/* Specular Interactive Glass Shine on Hover */}
-            {!video && tilt.hovered && (
-              <div
-                className="pointer-events-none absolute inset-0 z-1 size-full rounded-[inherit] transition-opacity duration-300"
-                style={{
-                  background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.22) 0%, transparent 65%)`,
-                }}
+                {/* Specular Interactive Glass Shine on Hover */}
+                {!video && tilt.hovered && (
+                  <div
+                    className="pointer-events-none absolute inset-0 z-1 size-full rounded-[inherit] transition-opacity duration-300"
+                    style={{
+                      background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.22) 0%, transparent 65%)`,
+                    }}
+                  />
+                )}
+              </>
+            )}
+
+            {/* Apple Motion Artwork */}
+            {motion && (
+              <MotionArtwork
+                key={motion.url}
+                motion={motion}
+                className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
+                playing={playing}
               />
             )}
+            {video && !theater && <VideoSurface className="absolute inset-0" />}
           </>
         )}
-
-        {/* Apple Motion Artwork */}
-        {motion && (
-          <MotionArtwork
-            key={motion.url}
-            motion={motion}
-            className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
-            playing={playing}
-          />
-        )}
-        {video && !theater && <VideoSurface className="absolute inset-0" />}
       </div>
 
       {/* Radiant Sound Aura beneath artwork */}
@@ -309,6 +345,7 @@ export function FullScreenPlayer() {
   // from which provider, is the panel's own business to say.
   const showLyrics = panel === 'lyrics';
   const showQueue = panel === 'queue';
+  const [vinylMode, setVinylMode] = useState(false);
   // Keep mountedPanel persistent so exit and entrance transitions are always fluid
   const [mountedPanel, setMountedPanel] = useState<'lyrics' | 'queue' | null>(() => panel ?? 'lyrics');
   useEffect(() => {
@@ -403,6 +440,7 @@ export function FullScreenPlayer() {
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
       <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} bpm={bpm} mode={gradientMode} />
+      <AmbientGlow accent={accent} />
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
@@ -447,6 +485,15 @@ export function FullScreenPlayer() {
         >
           <SlidersHorizontal size={18} strokeWidth={2.2} />
         </button>
+        <button
+          className={chromeButton}
+          aria-label="Toggle Vinyl Turntable Mode"
+          title={`Vinyl Turntable: ${vinylMode ? 'ON' : 'OFF'}`}
+          onClick={() => setVinylMode(!vinylMode)}
+        >
+          <Disc3 size={18} strokeWidth={2.2} className={vinylMode ? 'text-[#fa233b] animate-spin' : ''} />
+        </button>
+        <KaraokeButton className={chromeButton} />
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
           className={chromeButton}
@@ -500,6 +547,7 @@ export function FullScreenPlayer() {
             theater={theater}
             motion={motion}
             accent={accent}
+            vinylMode={vinylMode}
           />
 
           <div className={`flex items-center gap-3${theater ? '' : ' mt-[clamp(20px,3.2vh,32px)]'}${column ? ' max-md:mt-0' : ''}`}>

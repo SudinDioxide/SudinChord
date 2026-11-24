@@ -187,6 +187,12 @@ export function useMediaSession(): void {
           case 'toggleShuffle':
             player.toggleShuffle();
             break;
+          case 'cycleRepeat':
+            player.cycleRepeat();
+            break;
+          case 'setVolume':
+            if (typeof data === 'number') player.setVolume(Math.max(0, Math.min(1, data)));
+            break;
           case 'volumeUp':
             player.setVolume(Math.min(1, player.volume + 0.05));
             break;

@@ -15,6 +15,8 @@ const { pathToFileURL } = require('node:url');
 const ytAuth = require('./ytAuth.cjs');
 const spotifyAuth = require('./spotifyAuth.cjs');
 const { extractMetadata, extractArtwork, AUDIO_EXTS } = require('./localMetadata.cjs');
+const { RemoteServer } = require('./remoteServer.cjs');
+let remoteServer = null;
 
 app.name = 'SudinChord';
 
@@ -1399,6 +1401,11 @@ ipcMain.on('media:state', (_event, state) => {
   }
   updateTaskbarThumbnailToolbar(state);
   updateTrayMenu();
+  remoteServer?.updateState(state);
+});
+
+ipcMain.handle('remote:get-info', () => {
+  return remoteServer ? remoteServer.getInfo() : null;
 });
 
 ipcMain.on('window:toggle-mini-player', (_event, options) => {
@@ -1562,6 +1569,17 @@ app.whenReady().then(async () => {
   registerGlobalShortcuts();
   setupAutoUpdater();
 
+  try {
+    remoteServer = new RemoteServer({
+      onCommand: (cmd, data) => {
+        mainWindow?.webContents.send('media:command', cmd, data);
+      },
+    });
+    remoteServer.start();
+  } catch (err) {
+    console.warn('[RemoteServer] Start error:', err);
+  }
+
   if (app.isPackaged && autoUpdater) {
     setTimeout(() => {
       autoUpdater.checkForUpdatesAndNotify().catch((err) => {
@@ -1585,6 +1603,9 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  try {
+    remoteServer?.stop();
+  } catch {}
 });
 
 app.on('window-all-closed', () => {
