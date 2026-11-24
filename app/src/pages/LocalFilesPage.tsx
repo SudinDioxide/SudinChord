@@ -15,6 +15,8 @@ import {
   Disc3,
   ChevronLeft,
   Sparkles,
+  LayoutGrid,
+  Layers,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { playList, shuffleList } from '@/components/music/play';
@@ -23,6 +25,7 @@ import { formatDuration } from '@/components/music/links';
 import { localTracksManager, inferFormatInfo } from '@/playback/local/localTracks';
 import { usePageTint } from '@/lib/usePageTint';
 import { getElectronPlatform } from '@/lib/electronPlatform';
+import { InfiniteCoverFlow, type CoverFlowItem } from '@/components/music/InfiniteCoverFlow';
 import type { Track } from '@/data/music/types';
 
 const LOCAL_CONTEXT = { source: { title: 'Local Files', type: 'playlist' as const, id: 'local-files' } };
@@ -76,6 +79,7 @@ export default function LocalFilesPage() {
   const [sortBy, setSortBy] = useState<SortOption>('default');
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [selectedArtistName, setSelectedArtistName] = useState<string | null>(null);
+  const [albumLayout, setAlbumLayout] = useState<'coverflow' | 'grid'>('coverflow');
 
   usePageTint(null);
 
@@ -296,6 +300,20 @@ export default function LocalFilesPage() {
     if (!q) return albums;
     return albums.filter((a) => a.name.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q));
   }, [albums, searchQuery]);
+
+  // Cover flow items for 3D infinite carousel
+  const coverFlowItems: CoverFlowItem[] = useMemo(() => {
+    return filteredAlbums.map((album) => ({
+      id: album.id,
+      title: album.name,
+      artist: album.artist,
+      artworkUrl: album.artworkUri,
+      trackCount: album.tracks.length,
+      isHiRes: album.isHiRes,
+      onPlay: () => playList(album.tracks, 0, LOCAL_CONTEXT),
+      onSelect: () => setSelectedAlbumId(album.id),
+    }));
+  }, [filteredAlbums]);
 
   // Filtered artists
   const filteredArtists = useMemo(() => {
@@ -576,6 +594,34 @@ export default function LocalFilesPage() {
                     </select>
                   </div>
                 )}
+
+                {/* Album View Switcher: 3D Infinite Cover Flow vs Grid */}
+                {viewMode === 'albums' && (
+                  <div className="flex items-center rounded-[10px] bg-white/[0.04] p-0.5 border border-white/[0.08] shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setAlbumLayout('coverflow')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-xs font-medium transition-all cursor-pointer ${
+                        albumLayout === 'coverflow' ? 'bg-white/15 text-white shadow-sm' : 'text-white/50 hover:text-white/80'
+                      }`}
+                      title="3D Infinite Album Cover Flow"
+                    >
+                      <Layers size={13} />
+                      <span>Cover Flow</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAlbumLayout('grid')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-xs font-medium transition-all cursor-pointer ${
+                        albumLayout === 'grid' ? 'bg-white/15 text-white shadow-sm' : 'text-white/50 hover:text-white/80'
+                      }`}
+                      title="Album Grid View"
+                    >
+                      <LayoutGrid size={13} />
+                      <span>Grid</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -677,7 +723,7 @@ export default function LocalFilesPage() {
               />
             </div>
           ) : viewMode === 'albums' ? (
-            /* Albums Grid View */
+            /* Albums View (Cover Flow or Grid) */
             filteredAlbums.length === 0 ? (
               <div className="py-20 text-center text-white/50">
                 <p>No albums matching &ldquo;{searchQuery}&rdquo;</p>
@@ -687,6 +733,10 @@ export default function LocalFilesPage() {
                 >
                   Clear search
                 </button>
+              </div>
+            ) : albumLayout === 'coverflow' ? (
+              <div className="rounded-3xl border border-white/8 bg-black/30 backdrop-blur-md p-4 sm:p-6 shadow-2xl">
+                <InfiniteCoverFlow items={coverFlowItems} height={460} />
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

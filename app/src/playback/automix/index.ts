@@ -1,10 +1,8 @@
 import { AutoDJ, type AutomixHost, type AutoDJSnapshot } from './engine/autodj';
 import { Deck } from './engine/deck';
 import { LoopDeck } from './engine/loopDeck';
-import { VocalRemoverNode } from './engine/vocalRemover';
 import type { TransitionPlan } from './engine/transition-scheduler';
 import { registerGraphForFx, EQ_FREQUENCIES, EQ_Q_VALUES } from '@/state/audioFx';
-import { registerVocalRemover } from '@/state/karaoke';
 
 export type { AutomixHost, AutoDJSnapshot, TransitionPlan };
 export type { MixWindow } from './engine/autodj';
@@ -40,7 +38,6 @@ export function createAutomixGraph(
   const ctx = new AudioContext({ latencyHint: 'playback' });
   void ctx.resume();
   const master = new GainNode(ctx, { gain: 1 });
-  const vocalRemover = new VocalRemoverNode(ctx);
   const preamp = new GainNode(ctx, { gain: 1 });
 
   // 10-Band Graphic Equalizer Filter Chain with tuned musical Q factors
@@ -73,10 +70,8 @@ export function createAutomixGraph(
     smoothingTimeConstant: 0.82,
   });
 
-  // Connect Audio Chain: master -> vocalRemover -> preamp -> EQ[0..9] -> compressor -> analyser -> destination
+  // Connect Audio Chain: master -> preamp -> EQ[0..9] -> compressor -> analyser -> destination
   let lastNode: AudioNode = master;
-  lastNode.connect(vocalRemover.input);
-  lastNode = vocalRemover.output;
   lastNode.connect(preamp);
   lastNode = preamp;
   for (const filter of eqFilters) {
@@ -87,9 +82,8 @@ export function createAutomixGraph(
   compressor.connect(analyser);
   analyser.connect(ctx.destination);
 
-  // Sync with user's saved audio FX & karaoke settings
+  // Sync with user's saved audio FX settings
   registerGraphForFx({ ctx, preamp, eqFilters, compressor });
-  registerVocalRemover(vocalRemover);
 
   const decks = audios.map((audio, n) => new Deck(n === 0 ? 'A' : 'B', ctx, audio, master));
   // the loop mix's stretch decks (AutoMix's own), built the first time a loop mix is prepared

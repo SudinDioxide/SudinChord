@@ -16,6 +16,8 @@ export interface PlayRecord {
 export interface StatsSummary {
   totalListeningMinutes: number;
   totalPlays: number;
+  uniqueTracksCount: number;
+  uniqueArtistsCount: number;
   streakDays: number;
   topTracks: Array<{
     videoId: string;
@@ -37,6 +39,7 @@ export interface StatsSummary {
     evening: number; // 5pm - 10pm
     night: number; // 10pm - 6am
   };
+  hourly: number[]; // 24-hour bins (0..23)
 }
 
 const STORAGE_KEY = 'sudinchord:listening-stats:v1';
@@ -86,6 +89,7 @@ export const useListeningStats = create<ListeningStatsStore>((set, get) => ({
     const trackMap = new Map<string, { title: string; artist: string; artworkUrl?: string; album?: string; plays: number; seconds: number }>();
     const artistMap = new Map<string, { plays: number; seconds: number }>();
     const timeOfDay = { morning: 0, afternoon: 0, evening: 0, night: 0 };
+    const hourly = new Array(24).fill(0);
     const activeDates = new Set<string>();
 
     for (const p of filtered) {
@@ -118,8 +122,9 @@ export const useListeningStats = create<ListeningStatsStore>((set, get) => ({
         artistMap.set(artistName, { plays: 1, seconds: p.secondsListened });
       }
 
-      // Time of day
+      // Time of day & 24h distribution
       const hour = new Date(p.timestamp).getHours();
+      if (hour >= 0 && hour < 24) hourly[hour] = (hourly[hour] || 0) + 1;
       if (hour >= 6 && hour < 12) timeOfDay.morning++;
       else if (hour >= 12 && hour < 17) timeOfDay.afternoon++;
       else if (hour >= 17 && hour < 22) timeOfDay.evening++;
@@ -177,10 +182,13 @@ export const useListeningStats = create<ListeningStatsStore>((set, get) => ({
     return {
       totalListeningMinutes: Math.round(totalSeconds / 60),
       totalPlays: filtered.length,
+      uniqueTracksCount: trackMap.size,
+      uniqueArtistsCount: artistMap.size,
       streakDays,
       topTracks,
       topArtists,
       timeOfDay,
+      hourly,
     };
   },
 

@@ -1,6 +1,5 @@
 import { Disc3, Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useAudioFx } from '@/state/audioFx';
-import { KaraokeButton } from '@/components/audio/KaraokeControl';
 import { VinylRecord, Tonearm } from '@/components/music/VinylRecord';
 import { AmbientGlow } from '@/components/visual/AmbientGlow';
 import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
@@ -493,7 +492,6 @@ export function FullScreenPlayer() {
         >
           <Disc3 size={18} strokeWidth={2.2} className={vinylMode ? 'text-[#fa233b] animate-spin' : ''} />
         </button>
-        <KaraokeButton className={chromeButton} />
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button
           className={chromeButton}
