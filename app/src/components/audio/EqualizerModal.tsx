@@ -80,6 +80,29 @@ function AppleToggle({
 }
 
 export function EqualizerModal() {
+  const modalOpen = useAudioFx((s) => s.modalOpen);
+  const setModalOpen = useAudioFx((s) => s.setModalOpen);
+
+  // Global Keyboard Shortcut: Ctrl+Alt+E / Cmd+Alt+E & Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        setModalOpen(!useAudioFx.getState().modalOpen);
+      } else if (e.key === 'Escape' && useAudioFx.getState().modalOpen) {
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setModalOpen]);
+
+  if (!modalOpen) return null;
+
+  return <EqualizerModalDialog onClose={() => setModalOpen(false)} />;
+}
+
+function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
   const {
     eqEnabled,
     preset,
@@ -89,7 +112,6 @@ export function EqualizerModal() {
     customPresets,
     abComparing,
     normalization,
-    modalOpen,
     setEqEnabled,
     setBandGain,
     setPreamp,
@@ -99,7 +121,6 @@ export function EqualizerModal() {
     deleteCustomPreset,
     toggleAB,
     setNormalization,
-    setModalOpen,
     resetEq,
   } = useAudioFx();
 
@@ -111,22 +132,6 @@ export function EqualizerModal() {
   const fadersContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDraggingRef = useRef(false);
-
-  // Global Keyboard Shortcut: Ctrl+Alt+E / Cmd+Alt+E & Escape
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'e' || e.key === 'E')) {
-        e.preventDefault();
-        setModalOpen(!useAudioFx.getState().modalOpen);
-      } else if (e.key === 'Escape' && useAudioFx.getState().modalOpen) {
-        setPresetMenuOpen(false);
-        setSavingPreset(false);
-        setModalOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setModalOpen]);
 
   const allPresets = useMemo(() => [...EQ_PRESETS, ...customPresets], [customPresets]);
   const currentPreset = allPresets.find((p) => p.id === preset);
@@ -144,7 +149,6 @@ export function EqualizerModal() {
 
   // Real-Time Spectrum and Spline EQ Curve Rendering
   useEffect(() => {
-    if (!modalOpen) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -275,7 +279,7 @@ export function EqualizerModal() {
 
     render();
     return () => cancelAnimationFrame(animId);
-  }, [modalOpen, isPlaying, eqEnabled, abComparing, bands]);
+  }, [isPlaying, eqEnabled, abComparing, bands]);
 
   // Pointer sweep & multi-fader drag interaction
   const updateFaderFromCoord = useCallback(
@@ -323,15 +327,13 @@ export function EqualizerModal() {
     setSavingPreset(false);
   };
 
-  if (!modalOpen) return null;
-
   return (
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md animate-in fade-in duration-200"
       onClick={() => {
         setPresetMenuOpen(false);
         setSavingPreset(false);
-        setModalOpen(false);
+        onClose();
       }}
       role="dialog"
       aria-modal="true"
@@ -373,7 +375,7 @@ export function EqualizerModal() {
             </div>
 
             <button
-              onClick={() => setModalOpen(false)}
+              onClick={onClose}
               aria-label="Close"
               className="flex size-8 items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white transition-colors"
             >
@@ -745,7 +747,7 @@ export function EqualizerModal() {
 
           <button
             type="button"
-            onClick={() => setModalOpen(false)}
+            onClick={onClose}
             className="rounded-[20px] h-8 px-6 bg-white text-xs font-semibold text-black hover:bg-white/90 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             Done

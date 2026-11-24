@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useListeningStats } from '@/state/listeningStats';
 import { playTrack } from '@/components/music/play';
 import { sizedArtwork } from '@/lib/artwork';
@@ -6,7 +6,8 @@ import { Play, Flame, Clock, Music2, Users, Sun, Sunset, Moon, Sparkles, BarChar
 
 export function StatsPage() {
   const [range, setRange] = useState<'all' | '30d' | '7d'>('all');
-  const stats = useListeningStats((s) => s.getStats(range));
+  const plays = useListeningStats((s) => s.plays);
+  const stats = useMemo(() => useListeningStats.getState().getStats(range), [plays, range]);
 
   const hours = Math.floor(stats.totalListeningMinutes / 60);
   const minutes = stats.totalListeningMinutes % 60;

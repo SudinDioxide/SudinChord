@@ -3,7 +3,13 @@ import { Mic2, Sparkles, Volume2, ShieldCheck } from 'lucide-react';
 import { useKaraoke } from '@/state/karaoke';
 
 export function KaraokeButton({ className }: { className?: string }) {
-  const { enabled, vocalSuppression, preserveBass, setEnabled, setVocalSuppression, setPreserveBass, toggle } = useKaraoke();
+  const enabled = useKaraoke((s) => s.enabled);
+  const vocalSuppression = useKaraoke((s) => s.vocalSuppression);
+  const preserveBass = useKaraoke((s) => s.preserveBass);
+  const setEnabled = useKaraoke((s) => s.setEnabled);
+  const setVocalSuppression = useKaraoke((s) => s.setVocalSuppression);
+  const setPreserveBass = useKaraoke((s) => s.setPreserveBass);
+  const toggle = useKaraoke((s) => s.toggle);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

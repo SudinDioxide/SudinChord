@@ -15,12 +15,17 @@ export const useRemoteModal = create<RemoteModalStore>((set) => ({
 }));
 
 export function RemoteConnectModal() {
-  const { isOpen, close } = useRemoteModal();
+  const isOpen = useRemoteModal((s) => s.isOpen);
+  if (!isOpen) return null;
+  return <RemoteConnectModalDialog />;
+}
+
+function RemoteConnectModalDialog() {
+  const close = useRemoteModal((s) => s.close);
   const [remoteInfo, setRemoteInfo] = useState<{ ip: string; port: number; url: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
     const ep = (window as unknown as { electronPlatform?: { getRemoteInfo?: () => Promise<{ ip: string; port: number; url: string } | null> } }).electronPlatform;
     if (ep?.getRemoteInfo) {
       ep.getRemoteInfo().then((info) => {
@@ -30,9 +35,7 @@ export function RemoteConnectModal() {
       // Browser fallback
       setRemoteInfo({ ip: 'localhost', port: 2424, url: 'http://localhost:2424' });
     }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
+  }, []);
 
   const url = remoteInfo?.url || 'http://localhost:2424';
 
