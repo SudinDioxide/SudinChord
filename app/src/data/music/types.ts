@@ -74,6 +74,7 @@ export interface Track {
   unavailable?: 'matching' | 'missing';
   filePath?: string;
   fileSize?: number;
+  addedAt?: number;
   formatInfo?: {
     codec: string;
     bitDepth?: number;

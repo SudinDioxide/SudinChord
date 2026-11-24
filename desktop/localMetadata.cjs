@@ -101,6 +101,7 @@ async function extractMetadata(filePath) {
       isHiRes: false,
     },
     fileSize: 0,
+    addedAt: 0,
   };
 
   let fd = null;
@@ -108,6 +109,7 @@ async function extractMetadata(filePath) {
     fd = await fs.promises.open(filePath, 'r');
     const stat = await fd.stat();
     result.fileSize = stat.size;
+    result.addedAt = Math.round(stat.birthtimeMs || stat.ctimeMs || stat.mtimeMs || Date.now());
     const buf = Buffer.alloc(131072); // 128 KB
     const { bytesRead } = await fd.read(buf, 0, 131072, 0);
     const bytes = buf.subarray(0, bytesRead);

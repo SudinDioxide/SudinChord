@@ -25,6 +25,7 @@ export interface ScannedTrackItem {
     isHiRes?: boolean;
   } | null;
   fileSize?: number;
+  addedAt?: number;
 }
 
 const FOLDER_STORAGE_KEY = 'sudinchord_local_music_folder';
@@ -200,6 +201,7 @@ class LocalTracksManager {
         filePath: item.filePath,
         fileSize: item.fileSize,
         formatInfo: resolvedFormat,
+        addedAt: item.addedAt || Date.now(),
       };
 
       this.items.set(videoId, {
@@ -270,6 +272,7 @@ class LocalTracksManager {
         filePath: nativePath || undefined,
         fileSize: file.size,
         formatInfo: inferFormatInfo(nativePath || file.name),
+        addedAt: file.lastModified || Date.now(),
       };
 
       this.items.set(videoId, {

@@ -81,9 +81,15 @@ async function getCachedOrExtractMetadata(f) {
     const stat = await fs.promises.stat(f);
     const cached = metadataCache.get(f);
     if (cached && cached.mtimeMs === stat.mtimeMs && cached.meta && cached.meta.formatInfo) {
+      if (!cached.meta.addedAt) {
+        cached.meta.addedAt = Math.round(stat.birthtimeMs || stat.ctimeMs || stat.mtimeMs || Date.now());
+      }
       return cached.meta;
     }
     const meta = await extractMetadata(f);
+    if (!meta.addedAt) {
+      meta.addedAt = Math.round(stat.birthtimeMs || stat.ctimeMs || stat.mtimeMs || Date.now());
+    }
     metadataCache.set(f, { mtimeMs: stat.mtimeMs, meta });
     metadataCacheDirty = true;
     return meta;
@@ -1024,6 +1030,7 @@ ipcMain.handle('local:open-folder', async () => {
           hasArtwork: meta.hasArtwork,
           formatInfo: meta.formatInfo,
           fileSize: meta.fileSize,
+          addedAt: meta.addedAt || Date.now(),
         };
       }),
     );
@@ -1071,6 +1078,7 @@ ipcMain.handle('local:scan-folder', async (_event, folderPath) => {
           hasArtwork: meta.hasArtwork,
           formatInfo: meta.formatInfo,
           fileSize: meta.fileSize,
+          addedAt: meta.addedAt || Date.now(),
         };
       }),
     );
@@ -1100,6 +1108,7 @@ ipcMain.handle('local:parse-files', async (_event, filePaths) => {
           hasArtwork: meta.hasArtwork,
           formatInfo: meta.formatInfo,
           fileSize: meta.fileSize,
+          addedAt: meta.addedAt || Date.now(),
         };
       }),
     );

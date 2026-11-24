@@ -28,7 +28,17 @@ import type { Track } from '@/data/music/types';
 const LOCAL_CONTEXT = { source: { title: 'Local Files', type: 'playlist' as const, id: 'local-files' } };
 
 type ViewMode = 'songs' | 'albums' | 'artists';
-type SortOption = 'default' | 'title-asc' | 'title-desc' | 'artist-asc' | 'album-asc' | 'duration-desc' | 'duration-asc' | 'quality';
+type SortOption =
+  | 'default'
+  | 'date-desc'
+  | 'date-asc'
+  | 'title-asc'
+  | 'title-desc'
+  | 'artist-asc'
+  | 'album-asc'
+  | 'duration-desc'
+  | 'duration-asc'
+  | 'quality';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '';
@@ -251,7 +261,11 @@ export default function LocalFilesPage() {
       });
     }
 
-    if (sortBy === 'title-asc') {
+    if (sortBy === 'date-desc') {
+      result = [...result].sort((a, b) => (b.addedAt || (b.index ? b.index * 1000 : 0)) - (a.addedAt || (a.index ? a.index * 1000 : 0)));
+    } else if (sortBy === 'date-asc') {
+      result = [...result].sort((a, b) => (a.addedAt || (a.index ? a.index * 1000 : 0)) - (b.addedAt || (b.index ? b.index * 1000 : 0)));
+    } else if (sortBy === 'title-asc') {
       result = [...result].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     } else if (sortBy === 'title-desc') {
       result = [...result].sort((a, b) => (b.title || '').localeCompare(a.title || ''));
@@ -550,6 +564,8 @@ export default function LocalFilesPage() {
                       className="bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] rounded-[10px] pl-7 pr-3 py-1.5 text-xs text-white/80 hover:text-white focus:outline-none focus:border-key/60 cursor-pointer transition-all"
                     >
                       <option value="default" className="bg-[#1c1c1e] text-white">Default Order</option>
+                      <option value="date-desc" className="bg-[#1c1c1e] text-white">Date Added (Newest first)</option>
+                      <option value="date-asc" className="bg-[#1c1c1e] text-white">Date Added (Oldest first)</option>
                       <option value="title-asc" className="bg-[#1c1c1e] text-white">Title (A-Z)</option>
                       <option value="title-desc" className="bg-[#1c1c1e] text-white">Title (Z-A)</option>
                       <option value="artist-asc" className="bg-[#1c1c1e] text-white">Artist (A-Z)</option>
