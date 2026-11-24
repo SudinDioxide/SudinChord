@@ -17,6 +17,7 @@ async function main() {
     'localMetadata.cjs',
     'ytAuth.cjs',
     'spotifyAuth.cjs',
+    'remoteServer.cjs',
     'loginModal.html',
     'miniPlayer.html',
     'package.json',

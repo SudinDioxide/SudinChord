@@ -36,6 +36,7 @@
       "localMetadata.cjs",
       "ytAuth.cjs",
       "spotifyAuth.cjs",
+      "remoteServer.cjs",
       "loginModal.html",
       "miniPlayer.html",
       "assets/**/*",

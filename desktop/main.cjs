@@ -15,7 +15,12 @@ const { pathToFileURL } = require('node:url');
 const ytAuth = require('./ytAuth.cjs');
 const spotifyAuth = require('./spotifyAuth.cjs');
 const { extractMetadata, extractArtwork, AUDIO_EXTS } = require('./localMetadata.cjs');
-const { RemoteServer } = require('./remoteServer.cjs');
+let RemoteServer = null;
+try {
+  RemoteServer = require('./remoteServer.cjs').RemoteServer;
+} catch (e) {
+  console.warn('[RemoteServer] remoteServer.cjs not loaded:', e?.message || e);
+}
 let remoteServer = null;
 
 app.name = 'SudinChord';
@@ -1569,15 +1574,17 @@ app.whenReady().then(async () => {
   registerGlobalShortcuts();
   setupAutoUpdater();
 
-  try {
-    remoteServer = new RemoteServer({
-      onCommand: (cmd, data) => {
-        mainWindow?.webContents.send('media:command', cmd, data);
-      },
-    });
-    remoteServer.start();
-  } catch (err) {
-    console.warn('[RemoteServer] Start error:', err);
+  if (RemoteServer) {
+    try {
+      remoteServer = new RemoteServer({
+        onCommand: (cmd, data) => {
+          mainWindow?.webContents.send('media:command', cmd, data);
+        },
+      });
+      remoteServer.start();
+    } catch (err) {
+      console.warn('[RemoteServer] Start error:', err);
+    }
   }
 
   if (app.isPackaged && autoUpdater) {
