@@ -117,9 +117,9 @@ export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent
       smoothWave = Math.max(instantWave, smoothWave * 0.84);
       smoothBass = Math.max(instantBass, smoothBass * 0.88);
 
-      const targetOpacity = Math.min(1.0, 0.48 + smoothWave * 0.46 + smoothBass * 0.22).toFixed(2);
-      const cornerScale = (1.0 + smoothWave * 0.09 + smoothBass * 0.06).toFixed(3);
-      const sideScale = (1.0 + smoothWave * 0.07).toFixed(3);
+      const targetOpacity = Math.min(1.0, 0.45 + smoothWave * 0.45 + smoothBass * 0.20).toFixed(2);
+      const cornerScale = (1.0 + smoothWave * 0.08 + smoothBass * 0.05).toFixed(3);
+      const sideScale = (1.0 + smoothWave * 0.05).toFixed(3);
 
       if (glowRef.current) {
         glowRef.current.style.opacity = targetOpacity;
@@ -129,7 +129,7 @@ export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent
         cornersRef.current.style.transform = `scale(${cornerScale})`;
       }
       if (sidesRef.current) {
-        sidesRef.current.style.opacity = (parseFloat(targetOpacity) * 0.90).toFixed(2);
+        sidesRef.current.style.opacity = (parseFloat(targetOpacity) * 0.85).toFixed(2);
         sidesRef.current.style.transform = `scale(${sideScale})`;
       }
 
@@ -144,44 +144,44 @@ export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent
 
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none" aria-hidden="true">
-      {/* 4 Dynamic Contrasting Corner Waveform Flares */}
+      {/* 4 Lean Dynamic Corner Flares (Tight 20vmin corner hugs) */}
       <div
         ref={cornersRef}
         className="absolute inset-0 size-full transition-transform duration-75 ease-out will-change-[opacity,transform]"
         style={{
           background: `
-            radial-gradient(circle 50vw at 0% 0%, ${contrasts.glowA} 0%, ${contrasts.cornerA} 26%, transparent 72%),
-            radial-gradient(circle 50vw at 100% 0%, ${contrasts.glowB} 0%, ${contrasts.cornerB} 26%, transparent 72%),
-            radial-gradient(circle 50vw at 0% 100%, ${contrasts.glowB} 0%, ${contrasts.cornerB} 26%, transparent 72%),
-            radial-gradient(circle 50vw at 100% 100%, ${contrasts.glowA} 0%, ${contrasts.cornerA} 26%, transparent 72%)
+            radial-gradient(circle 22vmin at 0% 0%, ${contrasts.glowA} 0%, ${contrasts.cornerA} 30%, transparent 68%),
+            radial-gradient(circle 22vmin at 100% 0%, ${contrasts.glowB} 0%, ${contrasts.cornerB} 30%, transparent 68%),
+            radial-gradient(circle 22vmin at 0% 100%, ${contrasts.glowB} 0%, ${contrasts.cornerB} 30%, transparent 68%),
+            radial-gradient(circle 22vmin at 100% 100%, ${contrasts.glowA} 0%, ${contrasts.cornerA} 30%, transparent 68%)
           `,
           opacity: isPlaying ? 0.55 : 0.25,
           mixBlendMode: 'screen',
         }}
       />
 
-      {/* Side Perimeter Waveform Gradients */}
+      {/* Lean Side Perimeter Waveform Rim */}
       <div
         ref={sidesRef}
         className="absolute inset-0 size-full transition-transform duration-75 ease-out will-change-[opacity,transform]"
         style={{
           background: `
-            linear-gradient(to right, ${contrasts.glowA} 0%, transparent 18%),
-            linear-gradient(to left, ${contrasts.glowB} 0%, transparent 18%),
-            linear-gradient(to bottom, ${contrasts.glowA} 0%, transparent 14%),
-            linear-gradient(to top, ${contrasts.glowB} 0%, transparent 16%)
+            linear-gradient(to right, ${contrasts.glowA} 0%, transparent 36px),
+            linear-gradient(to left, ${contrasts.glowB} 0%, transparent 36px),
+            linear-gradient(to bottom, ${contrasts.glowA} 0%, transparent 24px),
+            linear-gradient(to top, ${contrasts.glowB} 0%, transparent 28px)
           `,
-          opacity: isPlaying ? 0.50 : 0.20,
+          opacity: isPlaying ? 0.45 : 0.18,
           mixBlendMode: 'screen',
         }}
       />
 
-      {/* Deep Inset Perimeter Box Shadow */}
+      {/* Lean Inset Perimeter Rim Glow */}
       <div
         ref={glowRef}
         className="absolute inset-0 size-full transition-opacity duration-100 ease-out will-change-[opacity]"
         style={{
-          boxShadow: `inset 0 0 220px 45px ${contrasts.glowA}, inset 0 0 70px 20px ${contrasts.glowB}`,
+          boxShadow: `inset 0 0 55px 8px ${contrasts.glowA}, inset 0 0 20px 4px ${contrasts.glowB}`,
           opacity: isPlaying ? 0.55 : 0.25,
         }}
       />
