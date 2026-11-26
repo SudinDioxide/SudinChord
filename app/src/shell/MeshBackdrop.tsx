@@ -240,20 +240,20 @@ export function MeshBackdrop({
         const rawTreble = trebleSum / (22 * 255);
         trebleEnergy = Math.min(1.0, Math.pow(rawTreble, 0.82) * 1.35);
 
-        // Highly-sensitive transient beat detection (sub-bass kick drum strike)
-        runningBassAvg = runningBassAvg * 0.92 + bassEnergy * 0.08;
-        if (bassEnergy > runningBassAvg * 1.10 && bassEnergy > 0.08) {
-          const delta = (bassEnergy - runningBassAvg) * 5.2;
+        // Balanced transient beat detection (sub-bass kick drum strike)
+        runningBassAvg = runningBassAvg * 0.95 + bassEnergy * 0.05;
+        if (bassEnergy > runningBassAvg * 1.18 && bassEnergy > 0.12) {
+          const delta = (bassEnergy - runningBassAvg) * 3.6;
           beatHit = Math.max(beatHit, Math.min(1.0, delta));
         }
       }
 
-      // Smooth crisp decay of beat hit impulse
-      beatHit *= 0.86;
+      // Smooth decay of beat hit impulse
+      beatHit *= 0.90;
 
       if (animate) {
-        // Musical momentum: fluid surges with kicks, waveforms, and energetic sections
-        const momentum = 1.0 + bassEnergy * 0.85 + beatHit * 0.65 + waveEnergy * 0.4;
+        // Musical momentum: calm, elegant flow with subtle rhythmic push
+        const momentum = 1.0 + bassEnergy * 0.15 + beatHit * 0.10;
         s.seconds += dt * momentum;
       }
 

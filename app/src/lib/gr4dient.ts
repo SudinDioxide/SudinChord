@@ -428,56 +428,55 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
       const mid = pulse ? pulse.mid : 0;
       const treble = pulse?.treble ?? (bass * 0.3 + mid * 0.4);
       const beat = pulse ? pulse.beatHit : 0;
-      const wave = pulse?.waveform ?? (bass * 0.6 + beat * 0.4);
 
-      // Harmonic Lissajous Orbs physics (high sensitivity & waveform reactivity)
+      // Harmonic Lissajous Orbs physics (smooth, organic musical orbits)
       // Phase t advances seamlessly in sync with musical downbeats
       const t = phase * Math.PI * 2;
 
-      // Orb 0 (Top Left [-0.48, 0.38] - Bass + Waveform harmonic 2:3 ratio)
-      const r0x = 0.16 + bass * 0.24 + beat * 0.20 + wave * 0.18;
-      const r0y = 0.13 + bass * 0.20 + beat * 0.16 + wave * 0.14;
+      // Orb 0 (Top Left [-0.48, 0.38] - Bass harmonic 2:3 ratio)
+      const r0x = 0.10 + bass * 0.06 + beat * 0.05;
+      const r0y = 0.08 + bass * 0.05 + beat * 0.04;
       flatPts[0] = DEFAULT_POINTS[0]![0] + Math.sin(t * 2.0 + Math.PI * 0.25) * r0x;
       flatPts[1] = DEFAULT_POINTS[0]![1] + Math.cos(t * 3.0) * r0y;
 
-      // Orb 1 (Top Right [0.48, 0.32] - Mid/Vocal + Waveform counter-phase 3:4 ratio)
-      const r1x = 0.15 + mid * 0.26 + wave * 0.18;
-      const r1y = 0.14 + mid * 0.23 + wave * 0.15;
+      // Orb 1 (Top Right [0.48, 0.32] - Mid/Vocal counter-phase 3:4 ratio)
+      const r1x = 0.09 + mid * 0.06;
+      const r1y = 0.08 + mid * 0.05;
       flatPts[2] = DEFAULT_POINTS[1]![0] + Math.sin(t * 3.0 + Math.PI * 0.5) * r1x;
       flatPts[3] = DEFAULT_POINTS[1]![1] + Math.cos(t * 4.0) * r1y;
 
       // Orb 2 (Center [0.0, -0.05] - Sub-bass kick dilated Lissajous 1:2 figure-8 knot)
-      const r2x = 0.18 + bass * 0.28 + beat * 0.36 + wave * 0.15;
-      const r2y = 0.14 + bass * 0.22 + beat * 0.30 + wave * 0.12;
+      const r2x = 0.11 + bass * 0.07 + beat * 0.08;
+      const r2y = 0.09 + bass * 0.06 + beat * 0.07;
       flatPts[4] = DEFAULT_POINTS[2]![0] + Math.sin(t * 1.0) * r2x;
       flatPts[5] = DEFAULT_POINTS[2]![1] + Math.cos(t * 2.0) * r2y;
 
-      // Orb 3 (Bottom Left [-0.42, -0.42] - Treble + Waveform shimmer 3:5 ratio)
-      const r3x = 0.14 + treble * 0.26 + wave * 0.18;
-      const r3y = 0.15 + treble * 0.24 + wave * 0.15;
+      // Orb 3 (Bottom Left [-0.42, -0.42] - Treble shimmer 3:5 ratio)
+      const r3x = 0.09 + treble * 0.06;
+      const r3y = 0.08 + treble * 0.05;
       flatPts[6] = DEFAULT_POINTS[3]![0] + Math.sin(t * 3.0 + Math.PI * 0.75) * r3x;
       flatPts[7] = DEFAULT_POINTS[3]![1] + Math.cos(t * 5.0) * r3y;
 
-      // Orb 4 (Bottom Right [0.45, -0.38] - Transient beat + Waveform surge 4:5 ratio)
-      const r4x = 0.16 + beat * 0.35 + bass * 0.20 + wave * 0.20;
-      const r4y = 0.14 + beat * 0.30 + bass * 0.16 + wave * 0.16;
+      // Orb 4 (Bottom Right [0.45, -0.38] - Transient beat surge 4:5 ratio)
+      const r4x = 0.10 + beat * 0.08 + bass * 0.04;
+      const r4y = 0.08 + beat * 0.07 + bass * 0.03;
       flatPts[8] = DEFAULT_POINTS[4]![0] + Math.sin(t * 4.0 + Math.PI) * r4x;
       flatPts[9] = DEFAULT_POINTS[4]![1] + Math.cos(t * 5.0) * r4y;
 
       // Harmonic Focus for Beam/Rays mode
-      const focusX = 0.0 + Math.sin(t * 1.5) * (0.16 + beat * 0.18 + wave * 0.10);
-      const focusY = 0.38 + Math.cos(t * 2.0 + 0.5) * (0.12 + bass * 0.14 + wave * 0.08);
+      const focusX = 0.0 + Math.sin(t * 1.5) * (0.08 + beat * 0.04);
+      const focusY = 0.38 + Math.cos(t * 2.0 + 0.5) * (0.06 + bass * 0.03);
 
-      // Dynamic physical reaction to music beat & bass drops
+      // Dynamic physical reaction to music beat & bass drops (smooth & elegant)
       const baseScale = mode === 1 ? 0.7 : mode === 2 ? 0.9 : 1.1;
-      const dynamicScale = baseScale * (1.0 + beat * 0.22 + bass * 0.10 + wave * 0.08);
+      const dynamicScale = baseScale * (1.0 + beat * 0.06);
 
       const baseWarp = mode === 2 ? 0.9 : 0.75;
-      const dynamicWarp = baseWarp + bass * 0.75 + beat * 0.45 + wave * 0.25;
+      const dynamicWarp = baseWarp + bass * 0.16 + beat * 0.09;
 
-      const dynamicMotion = 0.9 + bass * 1.1 + beat * 0.8 + wave * 0.4;
-      const dynamicBright = -0.02 + beat * 0.12 + bass * 0.05 + wave * 0.05;
-      const dynamicSat = 1.08 + beat * 0.35 + bass * 0.20 + wave * 0.15;
+      const dynamicMotion = 0.80 + bass * 0.20 + beat * 0.14;
+      const dynamicBright = -0.03 + beat * 0.04;
+      const dynamicSat = 1.08 + beat * 0.08;
 
       gl.uniform2f(U.uRes!, width, height);
       gl.uniform1f(U.uPhase!, phase);
