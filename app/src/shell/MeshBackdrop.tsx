@@ -208,36 +208,39 @@ export function MeshBackdrop({
         for (let i = 0; i < 7; i++) {
           bassSum += freqData[i]!;
         }
-        bassEnergy = bassSum / (7 * 255);
+        const rawBass = bassSum / (7 * 255);
+        bassEnergy = Math.min(1.0, Math.pow(rawBass, 0.78) * 1.35);
 
         // 2. Mid frequencies: bins 10 to 35 (~250 Hz - 1 kHz)
         let midSum = 0;
         for (let i = 10; i < 35; i++) {
           midSum += freqData[i]!;
         }
-        midEnergy = midSum / (25 * 255);
+        const rawMid = midSum / (25 * 255);
+        midEnergy = Math.min(1.0, Math.pow(rawMid, 0.82) * 1.35);
 
         // 3. Treble & presence: bins 36 to 58 (~1.5 kHz - 8 kHz)
         let trebleSum = 0;
         for (let i = 36; i < 58; i++) {
           trebleSum += freqData[i]!;
         }
-        trebleEnergy = trebleSum / (22 * 255);
+        const rawTreble = trebleSum / (22 * 255);
+        trebleEnergy = Math.min(1.0, Math.pow(rawTreble, 0.82) * 1.35);
 
-        // Dynamic transient beat detection (sub-bass kick drum strike)
-        runningBassAvg = runningBassAvg * 0.94 + bassEnergy * 0.06;
-        if (bassEnergy > runningBassAvg * 1.22 && bassEnergy > 0.18) {
-          const delta = (bassEnergy - runningBassAvg) * 3.8;
+        // Highly-sensitive transient beat detection (sub-bass kick drum strike)
+        runningBassAvg = runningBassAvg * 0.92 + bassEnergy * 0.08;
+        if (bassEnergy > runningBassAvg * 1.10 && bassEnergy > 0.08) {
+          const delta = (bassEnergy - runningBassAvg) * 5.2;
           beatHit = Math.max(beatHit, Math.min(1.0, delta));
         }
       }
 
-      // Smooth decay of beat hit impulse
-      beatHit *= 0.90;
+      // Smooth crisp decay of beat hit impulse
+      beatHit *= 0.86;
 
       if (animate) {
-        // Musical momentum: fluid surges with kicks and loud dynamic sections
-        const momentum = 1.0 + bassEnergy * 0.5 + beatHit * 0.35;
+        // Musical momentum: fluid surges with kicks and energetic dynamic sections
+        const momentum = 1.0 + bassEnergy * 0.95 + beatHit * 0.75;
         s.seconds += dt * momentum;
       }
 
