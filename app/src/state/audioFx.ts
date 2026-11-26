@@ -50,6 +50,7 @@ interface SavedFxState {
   binauralAngle: number;
   binauralAzimuth: number;
   binauralElevation: number;
+  autoOrbit: boolean;
 }
 
 function loadSavedState(): SavedFxState {
@@ -76,6 +77,7 @@ function loadSavedState(): SavedFxState {
         binauralAngle: typeof parsed.binauralAngle === 'number' ? Math.max(15, Math.min(70, parsed.binauralAngle)) : 35,
         binauralAzimuth: typeof parsed.binauralAzimuth === 'number' ? Math.max(-180, Math.min(180, parsed.binauralAzimuth)) : 0,
         binauralElevation: typeof parsed.binauralElevation === 'number' ? Math.max(-45, Math.min(45, parsed.binauralElevation)) : 0,
+        autoOrbit: typeof parsed.autoOrbit === 'boolean' ? parsed.autoOrbit : false,
       };
     }
   } catch {}
@@ -93,6 +95,7 @@ function loadSavedState(): SavedFxState {
     binauralAngle: 35,
     binauralAzimuth: 0,
     binauralElevation: 0,
+    autoOrbit: false,
   };
 }
 
@@ -111,6 +114,7 @@ export interface AudioFxState {
   binauralAngle: number;
   binauralAzimuth: number;
   binauralElevation: number;
+  autoOrbit: boolean;
   modalOpen: boolean;
 
   setEqEnabled: (enabled: boolean) => void;
@@ -129,6 +133,7 @@ export interface AudioFxState {
   setBinauralAngle: (angle: number) => void;
   setBinauralAzimuth: (azimuth: number) => void;
   setBinauralElevation: (elevation: number) => void;
+  setAutoOrbit: (autoOrbit: boolean) => void;
   setModalOpen: (open: boolean) => void;
   resetEq: () => void;
 }
@@ -150,6 +155,7 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
   binauralAngle: saved.binauralAngle,
   binauralAzimuth: saved.binauralAzimuth,
   binauralElevation: saved.binauralElevation,
+  autoOrbit: saved.autoOrbit,
   modalOpen: false,
 
   setEqEnabled(eqEnabled) {
@@ -268,6 +274,12 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
     syncAudioGraph();
   },
 
+  setAutoOrbit(autoOrbit) {
+    set({ autoOrbit });
+    persist(get());
+    checkOrbitLoop();
+  },
+
   setModalOpen(modalOpen) {
     set({ modalOpen });
   },
@@ -295,6 +307,7 @@ function persist(state: AudioFxState) {
       binauralAngle: state.binauralAngle,
       binauralAzimuth: state.binauralAzimuth,
       binauralElevation: state.binauralElevation,
+      autoOrbit: state.autoOrbit,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {}
@@ -317,6 +330,69 @@ let activeGraphRef: {
   spatialProcessor?: SpatialProcessorHandle;
 } | null = null;
 
+let orbitAnimId: number | null = null;
+let lastOrbitTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+function updateOrbitLoop() {
+  const { stereoEnabled, spatialMode, autoOrbit, binauralAzimuth, binauralAngle, binauralElevation, abComparing } = useAudioFx.getState();
+  const shouldOrbit = stereoEnabled && !abComparing && spatialMode === 'binaural_orbit' && autoOrbit && activeGraphRef !== null;
+
+  if (!shouldOrbit) {
+    if (orbitAnimId !== null) {
+      if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(orbitAnimId);
+      orbitAnimId = null;
+    }
+    return;
+  }
+
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const dt = Math.min(0.1, (now - lastOrbitTime) / 1000);
+  lastOrbitTime = now;
+
+  let nextAz = binauralAzimuth + dt * 26; // ~26 deg/sec continuous smooth 360 revolution
+  if (nextAz > 180) nextAz -= 360;
+
+  // Update store azimuth directly (keeps any open UI slider synchronized)
+  useAudioFx.setState({ binauralAzimuth: Math.round(nextAz * 10) / 10 });
+
+  // Update real-time 3D Panners in the Web Audio graph
+  if (activeGraphRef?.spatialProcessor && activeGraphRef.ctx) {
+    const ctx = activeGraphRef.ctx;
+    const { pannerL, pannerR } = activeGraphRef.spatialProcessor;
+    const distance = 1.8;
+    const leftAz = nextAz - binauralAngle;
+    const rightAz = nextAz + binauralAngle;
+    const el = binauralElevation;
+
+    const posL = calculateSpherical(leftAz, el, distance);
+    const posR = calculateSpherical(rightAz, el, distance);
+
+    setPannerCoords(pannerL, posL.x, posL.y, posL.z, ctx.currentTime);
+    setPannerCoords(pannerR, posR.x, posR.y, posR.z, ctx.currentTime);
+  }
+
+  if (typeof requestAnimationFrame !== 'undefined') {
+    orbitAnimId = requestAnimationFrame(updateOrbitLoop);
+  }
+}
+
+export function checkOrbitLoop() {
+  lastOrbitTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const { stereoEnabled, spatialMode, autoOrbit, abComparing } = useAudioFx.getState();
+  const shouldOrbit = stereoEnabled && !abComparing && spatialMode === 'binaural_orbit' && autoOrbit && activeGraphRef !== null;
+
+  if (shouldOrbit && orbitAnimId === null) {
+    if (typeof requestAnimationFrame !== 'undefined') {
+      orbitAnimId = requestAnimationFrame(updateOrbitLoop);
+    }
+  } else if (!shouldOrbit && orbitAnimId !== null) {
+    if (typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(orbitAnimId);
+    }
+    orbitAnimId = null;
+  }
+}
+
 export function registerGraphForFx(graph: {
   ctx: AudioContext;
   preamp?: GainNode;
@@ -326,6 +402,7 @@ export function registerGraphForFx(graph: {
 }) {
   activeGraphRef = graph;
   syncAudioGraph();
+  checkOrbitLoop();
 }
 
 /**
@@ -498,4 +575,6 @@ export function syncAudioGraph() {
       setPannerCoords(pannerR, posR.x, posR.y, posR.z, now);
     }
   }
+
+  checkOrbitLoop();
 }

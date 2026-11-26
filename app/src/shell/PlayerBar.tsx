@@ -46,6 +46,8 @@ export function PlayerBar() {
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
   const isSleepActive = useSleepTimer((s) => s.mode !== 'off');
+  const stereoEnabled = useAudioFx((s) => s.stereoEnabled);
+  const autoOrbit = useAudioFx((s) => s.autoOrbit);
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
   const [volumeOpen, setVolumeOpen] = useState(false);
 
@@ -124,12 +126,21 @@ export function PlayerBar() {
           </button>
           {isSleepActive && <SleepTimerButton className={fading} placement="above-end" />}
           <button
-            className={fading}
+            className={`${fading} relative transition-colors ${stereoEnabled ? 'text-sky-400 hover:text-sky-300' : ''}`}
             aria-label="Audio Equalizer & DSP (Ctrl+Alt+E)"
-            title="Audio Equalizer & DSP (Ctrl+Alt+E)"
+            title={
+              stereoEnabled
+                ? autoOrbit
+                  ? '3D Spatial Audio: Orbiting 360° (Ctrl+Alt+E)'
+                  : '3D Spatial Audio Active (Ctrl+Alt+E)'
+                : 'Audio Equalizer & DSP (Ctrl+Alt+E)'
+            }
             onClick={() => useAudioFx.getState().setModalOpen(true)}
           >
             <SlidersHorizontal size={17} strokeWidth={2.2} />
+            {stereoEnabled && (
+              <span className={`absolute top-1 right-0.5 size-1.5 rounded-full bg-sky-400 ${autoOrbit ? 'animate-ping' : ''}`} />
+            )}
           </button>
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} className={action} />
         </div>

@@ -343,6 +343,8 @@ export function FullScreenPlayer() {
   const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
   const accent = useArtworkAccent(nowPlaying?.artworkUrl);
   const setFullScreen = useUi((s) => s.setFullScreen);
+  const stereoEnabled = useAudioFx((s) => s.stereoEnabled);
+  const autoOrbit = useAudioFx((s) => s.autoOrbit);
   const video = useHasVideo(nowPlaying?.videoId);
   // The right-hand column: the lyrics, Up Next, or nothing. Lyrics toggle bottom left, Up Next bottom right.
   // A music video opens on its own, without the lyrics.
@@ -496,12 +498,21 @@ export function FullScreenPlayer() {
           <Sparkles size={18} strokeWidth={2.2} />
         </button>
         <button
-          className={chromeButton}
+          className={`${chromeButton} relative transition-colors ${stereoEnabled ? 'text-sky-400 hover:text-sky-300' : ''}`}
           aria-label="Equalizer & Audio FX"
-          title="Equalizer & Audio FX"
+          title={
+            stereoEnabled
+              ? autoOrbit
+                ? '3D Spatial Audio: Orbiting 360° (Ctrl+Alt+E)'
+                : '3D Spatial Audio Active (Ctrl+Alt+E)'
+              : 'Equalizer & Audio FX (Ctrl+Alt+E)'
+          }
           onClick={() => useAudioFx.getState().setModalOpen(true)}
         >
           <SlidersHorizontal size={18} strokeWidth={2.2} />
+          {stereoEnabled && (
+            <span className={`absolute top-1 right-1 size-1.5 rounded-full bg-sky-400 ${autoOrbit ? 'animate-ping' : ''}`} />
+          )}
         </button>
         <SleepTimerButton className={chromeButton} placement="below-end" />
         <button

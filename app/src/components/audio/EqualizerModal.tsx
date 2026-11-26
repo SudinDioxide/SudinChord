@@ -135,6 +135,8 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
     setBinauralAngle,
     setBinauralAzimuth,
     setBinauralElevation,
+    autoOrbit,
+    setAutoOrbit,
     resetEq,
   } = useAudioFx();
 
@@ -142,27 +144,6 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
-  const [autoOrbit, setAutoOrbit] = useState(false);
-
-  // Auto-Orbit continuous 360-degree rotation (inspired by twoz/binaural-vst)
-  useEffect(() => {
-    if (!autoOrbit || !stereoEnabled || spatialMode !== 'binaural_orbit') return;
-    let animId: number;
-    let lastTime = performance.now();
-
-    const loop = (time: number) => {
-      const dt = (time - lastTime) / 1000;
-      lastTime = time;
-      const currentAz = useAudioFx.getState().binauralAzimuth;
-      let nextAz = currentAz + dt * 26; // ~26 deg/sec smooth revolution
-      if (nextAz > 180) nextAz -= 360;
-      setBinauralAzimuth(Math.round(nextAz * 10) / 10);
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [autoOrbit, stereoEnabled, spatialMode, setBinauralAzimuth]);
 
   const fadersContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -748,9 +729,15 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
                     max={180}
                     step={1}
                     value={binauralAzimuth}
-                    disabled={!stereoEnabled || abComparing || autoOrbit}
-                    onChange={(e) => setBinauralAzimuth(parseFloat(e.target.value))}
-                    onDoubleClick={() => setBinauralAzimuth(0)}
+                    disabled={!stereoEnabled || abComparing}
+                    onChange={(e) => {
+                      setAutoOrbit(false);
+                      setBinauralAzimuth(parseFloat(e.target.value));
+                    }}
+                    onDoubleClick={() => {
+                      setAutoOrbit(false);
+                      setBinauralAzimuth(0);
+                    }}
                     title="Azimuth Angle (-180° to +180°, double-click to front)"
                     className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
                   />
@@ -769,13 +756,16 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
                     <button
                       key={p.label}
                       type="button"
-                      disabled={!stereoEnabled || abComparing || autoOrbit}
-                      onClick={() => setBinauralAzimuth(p.val)}
+                      disabled={!stereoEnabled || abComparing}
+                      onClick={() => {
+                        setAutoOrbit(false);
+                        setBinauralAzimuth(p.val);
+                      }}
                       className={`h-5 px-1.5 rounded text-[10px] transition-all cursor-pointer ${
                         Math.abs(binauralAzimuth - p.val) < 5 && stereoEnabled && !autoOrbit
                           ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30'
                           : 'bg-white/[0.04] text-white/50 hover:text-white border border-transparent'
-                      } ${!stereoEnabled || abComparing || autoOrbit ? 'opacity-40 pointer-events-none' : ''}`}
+                      } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
                     >
                       {p.label}
                     </button>
