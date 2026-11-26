@@ -18,6 +18,7 @@ import {
   BookmarkPlus,
   Trash2,
   SplitSquareVertical,
+  Headphones,
 } from 'lucide-react';
 
 function AppleToggle({
@@ -112,6 +113,8 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
     customPresets,
     abComparing,
     normalization,
+    stereoEnabled,
+    stereoWidth,
     setEqEnabled,
     setBandGain,
     setPreamp,
@@ -121,6 +124,8 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
     deleteCustomPreset,
     toggleAB,
     setNormalization,
+    setStereoEnabled,
+    setStereoWidth,
     resetEq,
   } = useAudioFx();
 
@@ -361,7 +366,7 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-white/50">10-band studio frequency control, anti-clipping headroom & real-time spectrum</p>
+              <p className="text-xs text-white/50">10-band studio frequency control, 3D stereo widener & real-time spectrum</p>
             </div>
           </div>
 
@@ -606,6 +611,70 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
                 {headroomDb.toFixed(1)} dB
               </span>
             )}
+          </div>
+        </div>
+
+        {/* 3D Spatial Stereo Expander Strip */}
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/[0.03] border border-white/5 px-3.5 py-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
+              <Headphones size={14} className={stereoEnabled ? 'text-sky-400' : 'text-white/40'} />
+              <span className={`text-xs font-semibold tracking-wide transition-colors ${stereoEnabled ? 'text-white' : 'text-white/50'}`}>
+                3D Stereo
+              </span>
+              <AppleToggle
+                checked={stereoEnabled}
+                onChange={setStereoEnabled}
+                activeColor="#38bdf8"
+                label="Toggle 3D Stereo Expander"
+              />
+            </div>
+            <span className="w-12 text-xs font-mono font-bold text-sky-400 text-right">
+              {Math.round(stereoWidth * 100)}%
+            </span>
+          </div>
+
+          {/* Width Slider */}
+          <div className="flex items-center gap-2 flex-1 min-w-[140px] max-w-[240px]">
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.05}
+              value={stereoWidth}
+              disabled={!stereoEnabled || abComparing}
+              onChange={(e) => setStereoWidth(parseFloat(e.target.value))}
+              onDoubleClick={() => setStereoWidth(1.0)}
+              title="Stereo Width (0% Mono to 200% Ultra-wide, double-click to reset 100%)"
+              className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
+            />
+          </div>
+
+          {/* Quick Preset Selector Pills */}
+          <div className="flex items-center gap-1">
+            {[
+              { label: 'Mono', val: 0 },
+              { label: 'Normal', val: 1.0 },
+              { label: 'Wide', val: 1.4 },
+              { label: '3D Spatial', val: 1.75 },
+            ].map((p) => {
+              const active = stereoEnabled && Math.abs(stereoWidth - p.val) < 0.04;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  disabled={!stereoEnabled || abComparing}
+                  onClick={() => setStereoWidth(p.val)}
+                  className={`h-6 px-2 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
+                    active
+                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold'
+                      : 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white border border-transparent'
+                  } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 

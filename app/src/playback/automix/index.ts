@@ -22,6 +22,69 @@ export interface AutomixGraph {
   analyser: AnalyserNode;
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
+  stereoSideGain: GainNode;
+}
+
+/**
+ * Mid/Side (M/S) Matrix Stereo Widener & 3D Spatial Audio Expander.
+ * 
+ * Matrix processing:
+ *   Mid  (M) = 0.5 * (Left + Right)   -> center image (mono compatibility, vocal, kick, bass)
+ *   Side (S) = 0.5 * (Left - Right)   -> panoramic spatial difference cues
+ *   Left_out  = Mid + (Width * Side)
+ *   Right_out = Mid - (Width * Side)
+ * 
+ * Width = 1.0: exact bit-perfect original stereo.
+ * Width > 1.0: expansive 3D acoustic field without hollow phase cancellation.
+ * Width = 0.0: clean mono fold-down.
+ */
+function createStereoWidener(ctx: AudioContext) {
+  const input = new GainNode(ctx, { gain: 1 });
+  const splitter = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 });
+  const merger = new ChannelMergerNode(ctx, { numberOfInputs: 2 });
+
+  // Mid path: M = 0.5 * L + 0.5 * R
+  const midSum = new GainNode(ctx, { gain: 1 });
+  const midL = new GainNode(ctx, { gain: 0.5 });
+  const midR = new GainNode(ctx, { gain: 0.5 });
+
+  // Side path: S = 0.5 * L - 0.5 * R
+  const sideSum = new GainNode(ctx, { gain: 1 });
+  const sideL = new GainNode(ctx, { gain: 0.5 });
+  const sideR = new GainNode(ctx, { gain: -0.5 });
+
+  // Side Width Multiplier
+  const sideGain = new GainNode(ctx, { gain: 1.0 });
+  const sideInvert = new GainNode(ctx, { gain: -1.0 });
+
+  // Connect input to splitter
+  input.connect(splitter);
+
+  // Sum Mid (L + R) * 0.5
+  splitter.connect(midL, 0);
+  splitter.connect(midR, 1);
+  midL.connect(midSum);
+  midR.connect(midSum);
+
+  // Sum Side (L - R) * 0.5
+  splitter.connect(sideL, 0);
+  splitter.connect(sideR, 1);
+  sideL.connect(sideSum);
+  sideR.connect(sideSum);
+
+  // Scale Side by width
+  sideSum.connect(sideGain);
+
+  // Re-synthesize Left: M + (W * S) into Merger channel 0
+  midSum.connect(merger, 0, 0);
+  sideGain.connect(merger, 0, 0);
+
+  // Re-synthesize Right: M - (W * S) into Merger channel 1
+  midSum.connect(merger, 0, 1);
+  sideGain.connect(sideInvert);
+  sideInvert.connect(merger, 0, 1);
+
+  return { input, output: merger, sideGain };
 }
 
 /**
@@ -65,12 +128,15 @@ export function createAutomixGraph(
     release: 0.25,
   });
 
+  // 3D Spatial Stereo Widener
+  const stereoWidener = createStereoWidener(ctx);
+
   const analyser = new AnalyserNode(ctx, {
     fftSize: 256,
     smoothingTimeConstant: 0.82,
   });
 
-  // Connect Audio Chain: master -> preamp -> EQ[0..9] -> compressor -> analyser -> destination
+  // Connect Audio Chain: master -> preamp -> EQ[0..9] -> compressor -> stereoWidener -> analyser -> destination
   let lastNode: AudioNode = master;
   lastNode.connect(preamp);
   lastNode = preamp;
@@ -79,16 +145,33 @@ export function createAutomixGraph(
     lastNode = filter;
   }
   lastNode.connect(compressor);
-  compressor.connect(analyser);
+  compressor.connect(stereoWidener.input);
+  stereoWidener.output.connect(analyser);
   analyser.connect(ctx.destination);
 
   // Sync with user's saved audio FX settings
-  registerGraphForFx({ ctx, preamp, eqFilters, compressor });
+  registerGraphForFx({
+    ctx,
+    preamp,
+    eqFilters,
+    compressor,
+    stereoSideGain: stereoWidener.sideGain,
+  });
 
   const decks = audios.map((audio, n) => new Deck(n === 0 ? 'A' : 'B', ctx, audio, master));
   // the loop mix's stretch decks (AutoMix's own), built the first time a loop mix is prepared
   let loops: Promise<[LoopDeck, LoopDeck]> | null = null;
   const loopDecks = () => (loops ??= Promise.all([LoopDeck.create(ctx, master), LoopDeck.create(ctx, master)]));
   const dj = new AutoDJ({ ctx, loopDecks, ...host(decks) }, onUpdate);
-  return { ctx, master, preamp, decks, dj, analyser, eqFilters, compressor };
+  return {
+    ctx,
+    master,
+    preamp,
+    decks,
+    dj,
+    analyser,
+    eqFilters,
+    compressor,
+    stereoSideGain: stereoWidener.sideGain,
+  };
 }

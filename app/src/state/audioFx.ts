@@ -42,6 +42,8 @@ interface SavedFxState {
   autoHeadroom: boolean;
   customPresets: EqPreset[];
   normalization: boolean;
+  stereoEnabled: boolean;
+  stereoWidth: number;
 }
 
 function loadSavedState(): SavedFxState {
@@ -57,6 +59,8 @@ function loadSavedState(): SavedFxState {
         autoHeadroom: typeof parsed.autoHeadroom === 'boolean' ? parsed.autoHeadroom : true,
         customPresets: Array.isArray(parsed.customPresets) ? parsed.customPresets : [],
         normalization: typeof parsed.normalization === 'boolean' ? parsed.normalization : true,
+        stereoEnabled: typeof parsed.stereoEnabled === 'boolean' ? parsed.stereoEnabled : false,
+        stereoWidth: typeof parsed.stereoWidth === 'number' ? Math.max(0, Math.min(2, parsed.stereoWidth)) : 1.4,
       };
     }
   } catch {}
@@ -68,6 +72,8 @@ function loadSavedState(): SavedFxState {
     autoHeadroom: true,
     customPresets: [],
     normalization: true,
+    stereoEnabled: false,
+    stereoWidth: 1.4,
   };
 }
 
@@ -80,6 +86,8 @@ export interface AudioFxState {
   customPresets: EqPreset[];
   abComparing: boolean;
   normalization: boolean;
+  stereoEnabled: boolean;
+  stereoWidth: number;
   modalOpen: boolean;
 
   setEqEnabled: (enabled: boolean) => void;
@@ -92,6 +100,8 @@ export interface AudioFxState {
   deleteCustomPreset: (id: string) => void;
   toggleAB: () => void;
   setNormalization: (enabled: boolean) => void;
+  setStereoEnabled: (enabled: boolean) => void;
+  setStereoWidth: (width: number) => void;
   setModalOpen: (open: boolean) => void;
   resetEq: () => void;
 }
@@ -107,6 +117,8 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
   customPresets: saved.customPresets,
   abComparing: false,
   normalization: saved.normalization,
+  stereoEnabled: saved.stereoEnabled,
+  stereoWidth: saved.stereoWidth,
   modalOpen: false,
 
   setEqEnabled(eqEnabled) {
@@ -185,6 +197,19 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
     syncAudioGraph();
   },
 
+  setStereoEnabled(stereoEnabled) {
+    set({ stereoEnabled });
+    persist(get());
+    syncAudioGraph();
+  },
+
+  setStereoWidth(stereoWidth) {
+    const clamped = Math.max(0, Math.min(2, Math.round(stereoWidth * 100) / 100));
+    set({ stereoWidth: clamped });
+    persist(get());
+    syncAudioGraph();
+  },
+
   setModalOpen(modalOpen) {
     set({ modalOpen });
   },
@@ -206,6 +231,8 @@ function persist(state: AudioFxState) {
       autoHeadroom: state.autoHeadroom,
       customPresets: state.customPresets,
       normalization: state.normalization,
+      stereoEnabled: state.stereoEnabled,
+      stereoWidth: state.stereoWidth,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {}
@@ -216,6 +243,7 @@ let activeGraphRef: {
   preamp?: GainNode;
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
+  stereoSideGain?: GainNode;
 } | null = null;
 
 export function registerGraphForFx(graph: {
@@ -223,6 +251,7 @@ export function registerGraphForFx(graph: {
   preamp?: GainNode;
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
+  stereoSideGain?: GainNode;
 }) {
   activeGraphRef = graph;
   syncAudioGraph();
@@ -238,16 +267,16 @@ export function calculateAutoHeadroomDb(bands: number[], preamp: number, autoHea
 
 export function syncAudioGraph() {
   if (!activeGraphRef) return;
-  const { eqEnabled, bands, preamp, autoHeadroom, abComparing, normalization } = useAudioFx.getState();
-  const { ctx, preamp: preampNode, eqFilters, compressor } = activeGraphRef;
+  const { eqEnabled, bands, preamp, autoHeadroom, abComparing, normalization, stereoEnabled, stereoWidth } = useAudioFx.getState();
+  const { ctx, preamp: preampNode, eqFilters, compressor, stereoSideGain } = activeGraphRef;
   const now = ctx.currentTime;
 
-  const isBypassed = !eqEnabled || abComparing;
+  const isBypassed = abComparing;
 
   // 1. Sync Preamp Gain with anti-clipping headroom
   if (preampNode) {
     const headroomDb = calculateAutoHeadroomDb(bands, preamp, autoHeadroom);
-    const effectivePreampDb = isBypassed ? 0 : preamp + headroomDb;
+    const effectivePreampDb = isBypassed || !eqEnabled ? 0 : preamp + headroomDb;
     const linearGain = Math.max(0.0001, Math.pow(10, effectivePreampDb / 20));
     try {
       preampNode.gain.setTargetAtTime(linearGain, now, 0.02);
@@ -258,7 +287,7 @@ export function syncAudioGraph() {
 
   // 2. Sync Biquad EQ Filters
   eqFilters.forEach((filter, idx) => {
-    const targetGain = isBypassed ? 0 : (bands[idx] ?? 0);
+    const targetGain = isBypassed || !eqEnabled ? 0 : (bands[idx] ?? 0);
     try {
       filter.gain.setTargetAtTime(targetGain, now, 0.02);
     } catch {
@@ -272,5 +301,15 @@ export function syncAudioGraph() {
     compressor.threshold.setTargetAtTime(targetThreshold, now, 0.05);
   } catch {
     compressor.threshold.value = normalization ? -24 : 0;
+  }
+
+  // 4. Sync 3D Stereo Widener (Mid/Side processing)
+  if (stereoSideGain) {
+    const effectiveWidth = isBypassed || !stereoEnabled ? 1.0 : stereoWidth;
+    try {
+      stereoSideGain.gain.setTargetAtTime(effectiveWidth, now, 0.02);
+    } catch {
+      stereoSideGain.gain.value = effectiveWidth;
+    }
   }
 }
