@@ -34,6 +34,8 @@ export const EQ_PRESETS: EqPreset[] = [
 const STORAGE_KEY = 'sudinchord:audio-fx:v2';
 const LEGACY_STORAGE_KEY = 'sudinchord:audio-fx:v1';
 
+export type SpatialMode = 'binaural' | 'binaural_orbit' | 'ms';
+
 interface SavedFxState {
   eqEnabled: boolean;
   preset: string;
@@ -44,6 +46,10 @@ interface SavedFxState {
   normalization: boolean;
   stereoEnabled: boolean;
   stereoWidth: number;
+  spatialMode: SpatialMode;
+  binauralAngle: number;
+  binauralAzimuth: number;
+  binauralElevation: number;
 }
 
 function loadSavedState(): SavedFxState {
@@ -51,6 +57,11 @@ function loadSavedState(): SavedFxState {
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      const validMode: SpatialMode =
+        parsed.spatialMode === 'ms' || parsed.spatialMode === 'binaural_orbit' || parsed.spatialMode === 'binaural'
+          ? parsed.spatialMode
+          : 'binaural';
+
       return {
         eqEnabled: typeof parsed.eqEnabled === 'boolean' ? parsed.eqEnabled : false,
         preset: parsed.preset || 'flat',
@@ -61,6 +72,10 @@ function loadSavedState(): SavedFxState {
         normalization: typeof parsed.normalization === 'boolean' ? parsed.normalization : true,
         stereoEnabled: typeof parsed.stereoEnabled === 'boolean' ? parsed.stereoEnabled : false,
         stereoWidth: typeof parsed.stereoWidth === 'number' ? Math.max(0, Math.min(2, parsed.stereoWidth)) : 1.4,
+        spatialMode: validMode,
+        binauralAngle: typeof parsed.binauralAngle === 'number' ? Math.max(15, Math.min(70, parsed.binauralAngle)) : 35,
+        binauralAzimuth: typeof parsed.binauralAzimuth === 'number' ? Math.max(-180, Math.min(180, parsed.binauralAzimuth)) : 0,
+        binauralElevation: typeof parsed.binauralElevation === 'number' ? Math.max(-45, Math.min(45, parsed.binauralElevation)) : 0,
       };
     }
   } catch {}
@@ -74,6 +89,10 @@ function loadSavedState(): SavedFxState {
     normalization: true,
     stereoEnabled: false,
     stereoWidth: 1.4,
+    spatialMode: 'binaural',
+    binauralAngle: 35,
+    binauralAzimuth: 0,
+    binauralElevation: 0,
   };
 }
 
@@ -88,6 +107,10 @@ export interface AudioFxState {
   normalization: boolean;
   stereoEnabled: boolean;
   stereoWidth: number;
+  spatialMode: SpatialMode;
+  binauralAngle: number;
+  binauralAzimuth: number;
+  binauralElevation: number;
   modalOpen: boolean;
 
   setEqEnabled: (enabled: boolean) => void;
@@ -102,6 +125,10 @@ export interface AudioFxState {
   setNormalization: (enabled: boolean) => void;
   setStereoEnabled: (enabled: boolean) => void;
   setStereoWidth: (width: number) => void;
+  setSpatialMode: (mode: SpatialMode) => void;
+  setBinauralAngle: (angle: number) => void;
+  setBinauralAzimuth: (azimuth: number) => void;
+  setBinauralElevation: (elevation: number) => void;
   setModalOpen: (open: boolean) => void;
   resetEq: () => void;
 }
@@ -119,6 +146,10 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
   normalization: saved.normalization,
   stereoEnabled: saved.stereoEnabled,
   stereoWidth: saved.stereoWidth,
+  spatialMode: saved.spatialMode,
+  binauralAngle: saved.binauralAngle,
+  binauralAzimuth: saved.binauralAzimuth,
+  binauralElevation: saved.binauralElevation,
   modalOpen: false,
 
   setEqEnabled(eqEnabled) {
@@ -210,6 +241,33 @@ export const useAudioFx = create<AudioFxState>((set, get) => ({
     syncAudioGraph();
   },
 
+  setSpatialMode(spatialMode) {
+    set({ spatialMode });
+    persist(get());
+    syncAudioGraph();
+  },
+
+  setBinauralAngle(binauralAngle) {
+    const clamped = Math.max(15, Math.min(70, Math.round(binauralAngle)));
+    set({ binauralAngle: clamped });
+    persist(get());
+    syncAudioGraph();
+  },
+
+  setBinauralAzimuth(binauralAzimuth) {
+    const clamped = Math.max(-180, Math.min(180, Math.round(binauralAzimuth)));
+    set({ binauralAzimuth: clamped });
+    persist(get());
+    syncAudioGraph();
+  },
+
+  setBinauralElevation(binauralElevation) {
+    const clamped = Math.max(-45, Math.min(45, Math.round(binauralElevation)));
+    set({ binauralElevation: clamped });
+    persist(get());
+    syncAudioGraph();
+  },
+
   setModalOpen(modalOpen) {
     set({ modalOpen });
   },
@@ -233,9 +291,22 @@ function persist(state: AudioFxState) {
       normalization: state.normalization,
       stereoEnabled: state.stereoEnabled,
       stereoWidth: state.stereoWidth,
+      spatialMode: state.spatialMode,
+      binauralAngle: state.binauralAngle,
+      binauralAzimuth: state.binauralAzimuth,
+      binauralElevation: state.binauralElevation,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {}
+}
+
+export interface SpatialProcessorHandle {
+  sideGain: GainNode;
+  pannerL: PannerNode;
+  pannerR: PannerNode;
+  msGain: GainNode;
+  binauralGain: GainNode;
+  dryGain: GainNode;
 }
 
 let activeGraphRef: {
@@ -243,7 +314,7 @@ let activeGraphRef: {
   preamp?: GainNode;
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
-  stereoSideGain?: GainNode;
+  spatialProcessor?: SpatialProcessorHandle;
 } | null = null;
 
 export function registerGraphForFx(graph: {
@@ -251,7 +322,7 @@ export function registerGraphForFx(graph: {
   preamp?: GainNode;
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
-  stereoSideGain?: GainNode;
+  spatialProcessor?: SpatialProcessorHandle;
 }) {
   activeGraphRef = graph;
   syncAudioGraph();
@@ -265,10 +336,67 @@ export function calculateAutoHeadroomDb(bands: number[], preamp: number, autoHea
   return totalBoost > 0 ? -totalBoost : 0;
 }
 
+function setRampedGain(node: GainNode, target: number, now: number) {
+  try {
+    node.gain.setTargetAtTime(target, now, 0.025);
+  } catch {
+    node.gain.value = target;
+  }
+}
+
+function setPannerCoords(panner: PannerNode, x: number, y: number, z: number, now: number) {
+  try {
+    panner.positionX.setTargetAtTime(x, now, 0.025);
+    panner.positionY.setTargetAtTime(y, now, 0.025);
+    panner.positionZ.setTargetAtTime(z, now, 0.025);
+  } catch {
+    try {
+      panner.positionX.value = x;
+      panner.positionY.value = y;
+      panner.positionZ.value = z;
+    } catch {
+      panner.setPosition?.(x, y, z);
+    }
+  }
+}
+
+function calculateSpherical(azimuthDeg: number, elevationDeg: number, distance: number) {
+  const azRad = (azimuthDeg * Math.PI) / 180;
+  const elRad = (elevationDeg * Math.PI) / 180;
+
+  const cosEl = Math.cos(elRad);
+  const sinEl = Math.sin(elRad);
+  const sinAz = Math.sin(azRad);
+  const cosAz = Math.cos(azRad);
+
+  // X: right (+) / left (-)
+  const x = distance * cosEl * sinAz;
+  // Y: up (+) / down (-)
+  const y = distance * sinEl;
+  // Z: front (-) / back (+)
+  const z = -distance * cosEl * cosAz;
+
+  return { x, y, z };
+}
+
 export function syncAudioGraph() {
   if (!activeGraphRef) return;
-  const { eqEnabled, bands, preamp, autoHeadroom, abComparing, normalization, stereoEnabled, stereoWidth } = useAudioFx.getState();
-  const { ctx, preamp: preampNode, eqFilters, compressor, stereoSideGain } = activeGraphRef;
+  const state = useAudioFx.getState();
+  const {
+    eqEnabled,
+    bands,
+    preamp,
+    autoHeadroom,
+    abComparing,
+    normalization,
+    stereoEnabled,
+    stereoWidth,
+    spatialMode,
+    binauralAngle,
+    binauralAzimuth,
+    binauralElevation,
+  } = state;
+  const { ctx, preamp: preampNode, eqFilters, compressor, spatialProcessor } = activeGraphRef;
   const now = ctx.currentTime;
 
   const isBypassed = abComparing;
@@ -303,13 +431,44 @@ export function syncAudioGraph() {
     compressor.threshold.value = normalization ? -24 : 0;
   }
 
-  // 4. Sync 3D Stereo Widener (Mid/Side processing)
-  if (stereoSideGain) {
-    const effectiveWidth = isBypassed || !stereoEnabled ? 1.0 : stereoWidth;
-    try {
-      stereoSideGain.gain.setTargetAtTime(effectiveWidth, now, 0.02);
-    } catch {
-      stereoSideGain.gain.value = effectiveWidth;
+  // 4. Sync Spatial Audio Processor (Binaural HRTF & Mid/Side)
+  if (spatialProcessor) {
+    const isSpatialActive = stereoEnabled && !isBypassed;
+    const { dryGain, msGain, binauralGain, sideGain, pannerL, pannerR } = spatialProcessor;
+
+    if (!isSpatialActive) {
+      // Bit-perfect straight wire dry bypass
+      setRampedGain(dryGain, 1.0, now);
+      setRampedGain(msGain, 0.0, now);
+      setRampedGain(binauralGain, 0.0, now);
+    } else if (spatialMode === 'ms') {
+      // Classical Mid/Side matrix widener
+      setRampedGain(dryGain, 0.0, now);
+      setRampedGain(msGain, 1.0, now);
+      setRampedGain(binauralGain, 0.0, now);
+      setRampedGain(sideGain, stereoWidth, now);
+    } else {
+      // Binaural HRTF 3D Spatial Audio (Virtual Studio Monitors or 360° Orbit)
+      setRampedGain(dryGain, 0.0, now);
+      setRampedGain(msGain, 0.0, now);
+      // Gentle 1.12x gain compensation for head-shadow HRTF acoustic filtering
+      setRampedGain(binauralGain, 1.12, now);
+
+      const distance = 1.8;
+      let leftAz = -binauralAngle;
+      let rightAz = +binauralAngle;
+      const el = binauralElevation;
+
+      if (spatialMode === 'binaural_orbit') {
+        leftAz = binauralAzimuth - binauralAngle;
+        rightAz = binauralAzimuth + binauralAngle;
+      }
+
+      const posL = calculateSpherical(leftAz, el, distance);
+      const posR = calculateSpherical(rightAz, el, distance);
+
+      setPannerCoords(pannerL, posL.x, posL.y, posL.z, now);
+      setPannerCoords(pannerR, posR.x, posR.y, posR.z, now);
     }
   }
 }

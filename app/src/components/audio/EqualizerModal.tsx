@@ -19,6 +19,7 @@ import {
   Trash2,
   SplitSquareVertical,
   Headphones,
+  Compass,
 } from 'lucide-react';
 
 function AppleToggle({
@@ -115,6 +116,10 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
     normalization,
     stereoEnabled,
     stereoWidth,
+    spatialMode,
+    binauralAngle,
+    binauralAzimuth,
+    binauralElevation,
     setEqEnabled,
     setBandGain,
     setPreamp,
@@ -126,6 +131,10 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
     setNormalization,
     setStereoEnabled,
     setStereoWidth,
+    setSpatialMode,
+    setBinauralAngle,
+    setBinauralAzimuth,
+    setBinauralElevation,
     resetEq,
   } = useAudioFx();
 
@@ -133,6 +142,27 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [autoOrbit, setAutoOrbit] = useState(false);
+
+  // Auto-Orbit continuous 360-degree rotation (inspired by twoz/binaural-vst)
+  useEffect(() => {
+    if (!autoOrbit || !stereoEnabled || spatialMode !== 'binaural_orbit') return;
+    let animId: number;
+    let lastTime = performance.now();
+
+    const loop = (time: number) => {
+      const dt = (time - lastTime) / 1000;
+      lastTime = time;
+      const currentAz = useAudioFx.getState().binauralAzimuth;
+      let nextAz = currentAz + dt * 26; // ~26 deg/sec smooth revolution
+      if (nextAz > 180) nextAz -= 360;
+      setBinauralAzimuth(Math.round(nextAz * 10) / 10);
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [autoOrbit, stereoEnabled, spatialMode, setBinauralAzimuth]);
 
   const fadersContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -614,68 +644,229 @@ function EqualizerModalDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* 3D Spatial Stereo Expander Strip */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/[0.03] border border-white/5 px-3.5 py-2">
-          <div className="flex items-center gap-2.5">
+        {/* 3D Spatial Audio & Binaural HRTF Expander Strip */}
+        <div className="mt-2.5 flex flex-col gap-2 rounded-xl bg-white/[0.03] border border-white/5 p-3">
+          {/* Main Bar: Header + AppleToggle + Mode Selector Tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
-              <Headphones size={14} className={stereoEnabled ? 'text-sky-400' : 'text-white/40'} />
+              <Headphones size={15} className={stereoEnabled ? 'text-sky-400' : 'text-white/40'} />
               <span className={`text-xs font-semibold tracking-wide transition-colors ${stereoEnabled ? 'text-white' : 'text-white/50'}`}>
-                3D Stereo
+                3D Spatial Audio
               </span>
               <AppleToggle
                 checked={stereoEnabled}
                 onChange={setStereoEnabled}
                 activeColor="#38bdf8"
-                label="Toggle 3D Stereo Expander"
+                label="Toggle 3D Spatial Audio"
               />
             </div>
-            <span className="w-12 text-xs font-mono font-bold text-sky-400 text-right">
-              {Math.round(stereoWidth * 100)}%
-            </span>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center gap-1 rounded-lg bg-black/40 p-0.5 border border-white/5">
+              {[
+                { id: 'binaural' as const, label: 'Binaural HRTF' },
+                { id: 'binaural_orbit' as const, label: '3D Orbit (VST)' },
+                { id: 'ms' as const, label: 'M/S Widener' },
+              ].map((m) => {
+                const active = spatialMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={!stereoEnabled || abComparing}
+                    onClick={() => setSpatialMode(m.id)}
+                    className={`h-6 px-2.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                      active && stereoEnabled && !abComparing
+                        ? 'bg-sky-500/25 text-sky-300 font-semibold shadow-sm'
+                        : 'text-white/50 hover:text-white/80'
+                    } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Width Slider */}
-          <div className="flex items-center gap-2 flex-1 min-w-[140px] max-w-[240px]">
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.05}
-              value={stereoWidth}
-              disabled={!stereoEnabled || abComparing}
-              onChange={(e) => setStereoWidth(parseFloat(e.target.value))}
-              onDoubleClick={() => setStereoWidth(1.0)}
-              title="Stereo Width (0% Mono to 200% Ultra-wide, double-click to reset 100%)"
-              className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
-            />
-          </div>
-
-          {/* Quick Preset Selector Pills */}
-          <div className="flex items-center gap-1">
-            {[
-              { label: 'Mono', val: 0 },
-              { label: 'Normal', val: 1.0 },
-              { label: 'Wide', val: 1.4 },
-              { label: '3D Spatial', val: 1.75 },
-            ].map((p) => {
-              const active = stereoEnabled && Math.abs(stereoWidth - p.val) < 0.04;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
+          {/* Mode Controls Sub-Panel */}
+          {spatialMode === 'binaural' && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/[0.04]">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <span className="text-[10px] uppercase font-semibold text-white/50 tracking-wider">Angle:</span>
+                <input
+                  type="range"
+                  min={15}
+                  max={70}
+                  step={1}
+                  value={binauralAngle}
                   disabled={!stereoEnabled || abComparing}
-                  onClick={() => setStereoWidth(p.val)}
-                  className={`h-6 px-2 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
-                    active
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold'
-                      : 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white border border-transparent'
-                  } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
+                  onChange={(e) => setBinauralAngle(parseFloat(e.target.value))}
+                  onDoubleClick={() => setBinauralAngle(35)}
+                  title="Virtual Monitor Angle (15° to 70°, double-click for 35°)"
+                  className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
+                />
+                <span className="w-12 text-xs font-mono font-bold text-sky-400 text-right">
+                  ±{binauralAngle}°
+                </span>
+              </div>
+
+              {/* Quick Monitor Angles */}
+              <div className="flex items-center gap-1">
+                {[
+                  { label: 'Studio (30°)', val: 30 },
+                  { label: 'Immersive (35°)', val: 35 },
+                  { label: 'Wide (45°)', val: 45 },
+                  { label: 'Ultra (60°)', val: 60 },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    disabled={!stereoEnabled || abComparing}
+                    onClick={() => setBinauralAngle(p.val)}
+                    className={`h-5 px-1.5 rounded text-[10px] transition-all cursor-pointer ${
+                      binauralAngle === p.val && stereoEnabled
+                        ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30'
+                        : 'bg-white/[0.04] text-white/50 hover:text-white border border-transparent'
+                    } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {spatialMode === 'binaural_orbit' && (
+            <div className="flex flex-col gap-2 pt-1 border-t border-white/[0.04]">
+              {/* Azimuth 360° Rotational Slider & Orbit button */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <span className="text-[10px] uppercase font-semibold text-white/50 tracking-wider">Azimuth:</span>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={binauralAzimuth}
+                    disabled={!stereoEnabled || abComparing || autoOrbit}
+                    onChange={(e) => setBinauralAzimuth(parseFloat(e.target.value))}
+                    onDoubleClick={() => setBinauralAzimuth(0)}
+                    title="Azimuth Angle (-180° to +180°, double-click to front)"
+                    className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
+                  />
+                  <span className="w-16 text-xs font-mono font-bold text-sky-400 text-right">
+                    {binauralAzimuth > 0 ? `+${binauralAzimuth}°` : `${binauralAzimuth}°`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {[
+                    { label: 'Front', val: 0 },
+                    { label: 'Right', val: 90 },
+                    { label: 'Behind', val: 180 },
+                    { label: 'Left', val: -90 },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      disabled={!stereoEnabled || abComparing || autoOrbit}
+                      onClick={() => setBinauralAzimuth(p.val)}
+                      className={`h-5 px-1.5 rounded text-[10px] transition-all cursor-pointer ${
+                        Math.abs(binauralAzimuth - p.val) < 5 && stereoEnabled && !autoOrbit
+                          ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30'
+                          : 'bg-white/[0.04] text-white/50 hover:text-white border border-transparent'
+                      } ${!stereoEnabled || abComparing || autoOrbit ? 'opacity-40 pointer-events-none' : ''}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    disabled={!stereoEnabled || abComparing}
+                    onClick={() => setAutoOrbit(!autoOrbit)}
+                    title="Auto-rotate audio 360° continuously around your head"
+                    className={`h-5 px-2 rounded text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                      autoOrbit && stereoEnabled
+                        ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 animate-pulse'
+                        : 'bg-white/[0.06] text-white/60 hover:text-white border border-white/10'
+                    } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
+                  >
+                    <span>{autoOrbit ? 'Orbiting 360°' : 'Auto-Orbit'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Elevation Slider */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase font-semibold text-white/50 tracking-wider">Elevation:</span>
+                <input
+                  type="range"
+                  min={-30}
+                  max={30}
+                  step={1}
+                  value={binauralElevation}
+                  disabled={!stereoEnabled || abComparing}
+                  onChange={(e) => setBinauralElevation(parseFloat(e.target.value))}
+                  onDoubleClick={() => setBinauralElevation(0)}
+                  title="Elevation Angle (-30° to +30°, double-click for ear level 0°)"
+                  className="flex-1 max-w-[200px] accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
+                />
+                <span className="text-[11px] font-mono text-white/60">
+                  {binauralElevation === 0 ? 'Ear Level (0°)' : binauralElevation > 0 ? `+${binauralElevation}° Above` : `${binauralElevation}° Below`}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {spatialMode === 'ms' && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/[0.04]">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <span className="text-[10px] uppercase font-semibold text-white/50 tracking-wider">Width:</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={stereoWidth}
+                  disabled={!stereoEnabled || abComparing}
+                  onChange={(e) => setStereoWidth(parseFloat(e.target.value))}
+                  onDoubleClick={() => setStereoWidth(1.0)}
+                  title="Stereo Width (0% to 200%, double-click for 100%)"
+                  className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-white/15 rounded-lg appearance-none"
+                />
+                <span className="w-12 text-xs font-mono font-bold text-sky-400 text-right">
+                  {Math.round(stereoWidth * 100)}%
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {[
+                  { label: 'Mono', val: 0 },
+                  { label: 'Normal', val: 1.0 },
+                  { label: 'Wide', val: 1.4 },
+                  { label: '3D Spatial', val: 1.75 },
+                ].map((p) => {
+                  const active = stereoEnabled && Math.abs(stereoWidth - p.val) < 0.04;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      disabled={!stereoEnabled || abComparing}
+                      onClick={() => setStereoWidth(p.val)}
+                      className={`h-5 px-1.5 rounded text-[10px] transition-all cursor-pointer ${
+                        active
+                          ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30'
+                          : 'bg-white/[0.04] text-white/50 hover:text-white border border-transparent'
+                      } ${!stereoEnabled || abComparing ? 'opacity-40 pointer-events-none' : ''}`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Studio Graphic EQ Faders Grid & Real-Time Spectrum Canvas */}
