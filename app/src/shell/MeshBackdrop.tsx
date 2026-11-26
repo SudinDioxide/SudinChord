@@ -186,6 +186,7 @@ export function MeshBackdrop({
 
     // Audio spectrum data buffers and beat detector variables
     const freqData = new Uint8Array(64);
+    const timeData = new Uint8Array(64);
     let runningBassAvg = 0.2;
     let beatHit = 0;
 
@@ -199,9 +200,21 @@ export function MeshBackdrop({
       let bassEnergy = 0;
       let midEnergy = 0;
       let trebleEnergy = 0;
+      let waveEnergy = 0;
 
       if (analyser && animate) {
         analyser.getByteFrequencyData(freqData);
+        analyser.getByteTimeDomainData(timeData);
+
+        // 0. Real-time oscilloscope waveform amplitude (instantaneous sound pressure)
+        let wavePeak = 0;
+        let waveSum = 0;
+        for (let i = 0; i < 64; i++) {
+          const dev = Math.abs(timeData[i]! - 128) / 128;
+          if (dev > wavePeak) wavePeak = dev;
+          waveSum += dev;
+        }
+        waveEnergy = Math.min(1.0, (wavePeak * 0.75 + (waveSum / 64) * 0.45) * 1.5);
 
         // 1. Sub-bass & kick drum: bins 0 to 6 (~20 Hz - 140 Hz)
         let bassSum = 0;
@@ -239,8 +252,8 @@ export function MeshBackdrop({
       beatHit *= 0.86;
 
       if (animate) {
-        // Musical momentum: fluid surges with kicks and energetic dynamic sections
-        const momentum = 1.0 + bassEnergy * 0.95 + beatHit * 0.75;
+        // Musical momentum: fluid surges with kicks, waveforms, and energetic sections
+        const momentum = 1.0 + bassEnergy * 0.85 + beatHit * 0.65 + waveEnergy * 0.4;
         s.seconds += dt * momentum;
       }
 
@@ -261,6 +274,7 @@ export function MeshBackdrop({
             mid: midEnergy,
             treble: trebleEnergy,
             beatHit,
+            waveform: waveEnergy,
           });
         } else if (fallbackCanvas) {
           fallbackCanvas.draw(s.seconds);

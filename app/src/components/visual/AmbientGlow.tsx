@@ -5,35 +5,80 @@ import type { ArtworkAccent } from '@/lib/artworkAccent';
 export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent | null; enabled?: boolean }) {
   const isPlaying = usePlayer((s) => s.status === 'playing');
   const glowRef = useRef<HTMLDivElement>(null);
+  const cornersRef = useRef<HTMLDivElement>(null);
+  const sidesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!enabled || !glowRef.current) return;
-    const el = glowRef.current;
+    if (!enabled) return;
     const analyser = getAudioAnalyser();
     if (!analyser) return;
 
     let animId: number;
-    const freqData = new Uint8Array(32);
+    const timeData = new Uint8Array(64);
+    const freqData = new Uint8Array(64);
+
+    let smoothWave = 0;
+    let smoothBass = 0;
 
     const tick = () => {
       if (!isPlaying) {
-        el.style.opacity = '0.15';
-        el.style.transform = 'scale(1)';
+        if (glowRef.current) {
+          glowRef.current.style.opacity = '0.2';
+          glowRef.current.style.transform = 'scale(1)';
+        }
+        if (cornersRef.current) {
+          cornersRef.current.style.opacity = '0.25';
+          cornersRef.current.style.transform = 'scale(1)';
+        }
+        if (sidesRef.current) {
+          sidesRef.current.style.opacity = '0.15';
+          sidesRef.current.style.transform = 'scale(1)';
+        }
         return;
       }
 
-      analyser.getByteFrequencyData(freqData);
-      // Sample low-bass kick energy (bins 0-3: 20-150 Hz)
-      const b0 = freqData[0] ?? 0;
-      const b1 = freqData[1] ?? 0;
-      const b2 = freqData[2] ?? 0;
-      const b3 = freqData[3] ?? 0;
-      const bassEnergy = (b0 + b1 + b2 + b3) / (4 * 255);
-      const targetOpacity = 0.25 + bassEnergy * 0.55;
-      const targetScale = 1.0 + bassEnergy * 0.04;
+      // 1. Instantaneous audio waveform data (oscilloscope amplitude)
+      analyser.getByteTimeDomainData(timeData);
+      let wavePeak = 0;
+      let waveSum = 0;
+      for (let i = 0; i < 64; i++) {
+        const dev = Math.abs(timeData[i]! - 128) / 128; // 0.0 to 1.0 real-time waveform oscillation
+        if (dev > wavePeak) wavePeak = dev;
+        waveSum += dev;
+      }
+      const rawWave = wavePeak * 0.75 + (waveSum / 64) * 0.45;
 
-      el.style.opacity = targetOpacity.toFixed(2);
-      el.style.transform = `scale(${targetScale.toFixed(3)})`;
+      // 2. Frequency spectrum (kick sub-bass & impact)
+      analyser.getByteFrequencyData(freqData);
+      let bassSum = 0;
+      for (let i = 0; i < 7; i++) {
+        bassSum += freqData[i]!;
+      }
+      const rawBass = bassSum / (7 * 255);
+
+      // High-sensitivity perceptual audio scaling
+      const instantWave = Math.min(1.0, Math.pow(rawWave, 0.72) * 1.6);
+      const instantBass = Math.min(1.0, Math.pow(rawBass, 0.75) * 1.4);
+
+      // Fast-attack, smooth-decay physics
+      smoothWave = Math.max(instantWave, smoothWave * 0.84);
+      smoothBass = Math.max(instantBass, smoothBass * 0.88);
+
+      const targetOpacity = Math.min(1.0, 0.40 + smoothWave * 0.45 + smoothBass * 0.20).toFixed(2);
+      const cornerScale = (1.0 + smoothWave * 0.08 + smoothBass * 0.06).toFixed(3);
+      const sideScale = (1.0 + smoothWave * 0.06).toFixed(3);
+
+      if (glowRef.current) {
+        glowRef.current.style.opacity = targetOpacity;
+      }
+      if (cornersRef.current) {
+        cornersRef.current.style.opacity = targetOpacity;
+        cornersRef.current.style.transform = `scale(${cornerScale})`;
+      }
+      if (sidesRef.current) {
+        sidesRef.current.style.opacity = (parseFloat(targetOpacity) * 0.85).toFixed(2);
+        sidesRef.current.style.transform = `scale(${sideScale})`;
+      }
 
       animId = requestAnimationFrame(tick);
     };
@@ -45,17 +90,52 @@ export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent
   if (!enabled) return null;
 
   const color = accent?.primary ?? '#fa233b';
-  const glowColor = accent?.glow ?? 'rgba(250, 35, 59, 0.4)';
+  const secondary = accent?.secondary ?? '#ff2a5f';
+  const glowColor = accent?.glow ?? 'rgba(250, 35, 59, 0.55)';
 
   return (
-    <div
-      ref={glowRef}
-      className="pointer-events-none fixed inset-0 z-0 transition-all duration-100 ease-out will-change-[opacity,transform]"
-      style={{
-        boxShadow: `inset 0 0 120px 30px ${glowColor}, inset 0 0 40px 10px ${color}`,
-        opacity: isPlaying ? 0.35 : 0.15,
-      }}
-      aria-hidden="true"
-    />
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none" aria-hidden="true">
+      {/* 4 Dynamic Corner Waveform Flares */}
+      <div
+        ref={cornersRef}
+        className="absolute inset-0 size-full transition-transform duration-75 ease-out will-change-[opacity,transform]"
+        style={{
+          background: `
+            radial-gradient(circle 45vw at 0% 0%, ${glowColor} 0%, ${color} 28%, transparent 70%),
+            radial-gradient(circle 45vw at 100% 0%, ${glowColor} 0%, ${secondary} 28%, transparent 70%),
+            radial-gradient(circle 45vw at 0% 100%, ${glowColor} 0%, ${secondary} 28%, transparent 70%),
+            radial-gradient(circle 45vw at 100% 100%, ${glowColor} 0%, ${color} 28%, transparent 70%)
+          `,
+          opacity: isPlaying ? 0.45 : 0.2,
+          mixBlendMode: 'screen',
+        }}
+      />
+
+      {/* Side Perimeter Waveform Gradients */}
+      <div
+        ref={sidesRef}
+        className="absolute inset-0 size-full transition-transform duration-75 ease-out will-change-[opacity,transform]"
+        style={{
+          background: `
+            linear-gradient(to right, ${glowColor} 0%, transparent 16%),
+            linear-gradient(to left, ${glowColor} 0%, transparent 16%),
+            linear-gradient(to bottom, ${glowColor} 0%, transparent 12%),
+            linear-gradient(to top, ${glowColor} 0%, transparent 15%)
+          `,
+          opacity: isPlaying ? 0.4 : 0.15,
+          mixBlendMode: 'screen',
+        }}
+      />
+
+      {/* Deep Inset Perimeter Box Shadow */}
+      <div
+        ref={glowRef}
+        className="absolute inset-0 size-full transition-opacity duration-100 ease-out will-change-[opacity]"
+        style={{
+          boxShadow: `inset 0 0 200px 40px ${glowColor}, inset 0 0 60px 15px ${color}`,
+          opacity: isPlaying ? 0.45 : 0.2,
+        }}
+      />
+    </div>
   );
 }
