@@ -160,7 +160,8 @@ float bayer8(vec2 a) {
 vec2 SO;
 
 vec2 lp(float r) {
-  float a = uPhase * TAU;
+  // Move front/forward toward viewer, not backward
+  float a = -uPhase * TAU;
   return vec2(cos(a), sin(a)) * r * uMotion;
 }
 
@@ -206,7 +207,7 @@ vec3 mesh(vec2 uv) {
   float pw = mix(5.0, 2.0, uSoft);
   vec3 acc = vec3(0.0);
   float ws = 0.0;
-  float a = uPhase * TAU;
+  float a = -uPhase * TAU;
   for (int j = 0; j < 5; j++) {
     if (j < uCount) {
       float fj = float(j);
@@ -223,17 +224,17 @@ vec3 mesh(vec2 uv) {
 // FLOW: two levels of domain warping mapped onto the palette ramp
 vec3 flow(vec2 uv) {
   vec2 p = uv * uScale * 0.5 + SO;
-  vec2 q = vec2(fbm2(p + lp(0.45)), fbm2(p + vec2(5.2, 1.3) - lp(0.45)));
-  vec2 r = vec2(fbm2(p + q * uWarp * 1.2 + vec2(1.7, 9.2) + lp(0.3)), fbm2(p + q * uWarp * 1.2 + vec2(8.3, 2.8)));
-  float f = fbm2(p + r * uWarp * 1.2);
+  vec2 q = vec2(fbm2(p - lp(0.45)), fbm2(p + vec2(5.2, 1.3) + lp(0.45)));
+  vec2 r = vec2(fbm2(p - q * uWarp * 1.2 + vec2(1.7, 9.2) - lp(0.3)), fbm2(p + q * uWarp * 1.2 + vec2(8.3, 2.8)));
+  float f = fbm2(p - r * uWarp * 1.2);
   return ramp(f * mix(1.3, 0.8, uSoft) + 0.5);
 }
 
 // SILK: a height field lit like folded fabric
 float silkH(vec2 p) {
   vec2 q = p;
-  q.y += snoise(p * 0.35 + SO + lp(0.4)) * uWarp * 0.8;
-  return sin(q.y * 1.6 + snoise(q * 0.45 + SO + lp(0.25)) * 2.2);
+  q.y -= snoise(p * 0.35 + SO - lp(0.4)) * uWarp * 0.8;
+  return sin(q.y * 1.6 - snoise(q * 0.45 + SO - lp(0.25)) * 2.2);
 }
 
 vec3 silk(vec2 uv) {
@@ -257,10 +258,10 @@ vec3 rays(vec2 uv) {
   vec2 d = uv - uFocus;
   float r = length(d);
   vec2 dir = d / (r + 1e-4);
-  float n = fbm(dir * uScale * 2.0 + SO + lp(0.35));
-  float n2 = fbm(dir * uScale * 5.0 + SO * 1.3 - lp(0.25));
+  float n = fbm(dir * uScale * 2.0 + SO - lp(0.35));
+  float n2 = fbm(dir * uScale * 5.0 + SO * 1.3 + lp(0.25));
   float beams = smoothstep(-0.3, 0.8, n * 0.8 + n2 * 0.4);
-  float wr = r + fbm(uv * 1.5 + SO + lp(0.3)) * uWarp * 0.2;
+  float wr = r - fbm(uv * 1.5 + SO - lp(0.3)) * uWarp * 0.2;
   float t = exp(-wr * mix(2.6, 1.1, uSoft)) * (0.35 + 0.9 * beams) + 0.3 * exp(-r * r * 18.0);
   return ramp(t);
 }

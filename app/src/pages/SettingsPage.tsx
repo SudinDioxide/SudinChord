@@ -13,6 +13,7 @@ import { AUTOMIX_BARS } from '@/playback/automix/choices';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 import { useGr4dientMode } from '@/shell/MeshBackdrop';
 import { GR4DIENT_MODES, type Gr4dientMode } from '@/lib/gr4dient';
+import { useAmbientGlowSetting } from '@/components/visual/AmbientGlow';
 import { AddonSettings } from './AddonSettings';
 import {
   AppleMusicIntegration,
@@ -68,6 +69,7 @@ export default function SettingsPage() {
   const setShareHistory = useHistorySettings((s) => s.setShare);
   const { setAutoplay, setCrossfade, setAutomix, setAutomixBars, setShowNerdStats } = usePlayer.getState();
   const [gradientMode, setGradientMode] = useGr4dientMode();
+  const [ambientGlow, setAmbientGlow] = useAmbientGlowSetting();
   const [lyrics, setLyrics] = useState(false);
   const present = extension.state === 'present';
   const discordText =
@@ -199,6 +201,12 @@ export default function SettingsPage() {
               onChange={setGradientMode}
             />
           </label>
+          <Toggle
+            label="Corner & Side Gradient Glow"
+            detail="Audio-reactive ambient glow around the screen corners and side edges in full-screen player."
+            checked={ambientGlow}
+            onChange={setAmbientGlow}
+          />
         </section>
         {automix && (
           <p className={settingsUi.footer}>

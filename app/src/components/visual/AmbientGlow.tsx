@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getAudioAnalyser, usePlayer } from '@/state/player';
 import type { ArtworkAccent } from '@/lib/artworkAccent';
 
@@ -52,7 +52,50 @@ function getContrastingAccents(colorStr: string) {
   };
 }
 
-export function AmbientGlow({ accent, enabled = true }: { accent?: ArtworkAccent | null; enabled?: boolean }) {
+const STORAGE_KEY = 'sudinchord.ambientGlow.enabled';
+
+export function useAmbientGlowSetting(): [boolean, (enabled: boolean) => void] {
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return true; // Default: On
+  });
+
+  const update = (next: boolean) => {
+    setEnabled(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, String(next));
+      window.dispatchEvent(new CustomEvent('sudinchord:ambient-glow', { detail: next }));
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'boolean') {
+        setEnabled(detail);
+      }
+    };
+    window.addEventListener('sudinchord:ambient-glow', handler);
+    return () => window.removeEventListener('sudinchord:ambient-glow', handler);
+  }, []);
+
+  return [enabled, update];
+}
+
+export function AmbientGlow({
+  accent,
+  enabled: propEnabled,
+}: {
+  accent?: ArtworkAccent | null;
+  enabled?: boolean;
+}) {
+  const [globalEnabled] = useAmbientGlowSetting();
+  const enabled = propEnabled !== undefined ? propEnabled : globalEnabled;
   const isPlaying = usePlayer((s) => s.status === 'playing');
   const glowRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef<HTMLDivElement>(null);

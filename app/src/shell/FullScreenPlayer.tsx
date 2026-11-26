@@ -1,7 +1,7 @@
-import { Disc3, Maximize, Minimize, PictureInPicture2, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import { Disc3, Maximize, Minimize, PictureInPicture2, Scan, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useAudioFx } from '@/state/audioFx';
 import { VinylRecord } from '@/components/music/VinylRecord';
-import { AmbientGlow } from '@/components/visual/AmbientGlow';
+import { AmbientGlow, useAmbientGlowSetting } from '@/components/visual/AmbientGlow';
 import { AudioSpectrumVisualizer } from '@/components/audio/AudioSpectrumVisualizer';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
@@ -442,6 +442,7 @@ export function FullScreenPlayer() {
   const corner = `${chrome} transition-[background-color,color,opacity] duration-300${hidden}`;
 
   const [gradientMode, setGradientMode] = useGr4dientMode();
+  const [ambientGlow, setAmbientGlow] = useAmbientGlowSetting();
   const bpm = analyzer.get(nowPlaying.videoId)?.bpm ?? null;
 
   return (
@@ -460,7 +461,7 @@ export function FullScreenPlayer() {
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
       <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} bpm={bpm} mode={gradientMode} />
-      <AmbientGlow accent={accent} />
+      <AmbientGlow accent={accent} enabled={ambientGlow} />
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
@@ -496,6 +497,14 @@ export function FullScreenPlayer() {
           onClick={() => setGradientMode(((gradientMode + 1) % 4) as Gr4dientMode)}
         >
           <Sparkles size={18} strokeWidth={2.2} />
+        </button>
+        <button
+          className={`${chromeButton} relative transition-colors ${ambientGlow ? 'text-amber-400 hover:text-amber-300' : 'text-white/40 hover:text-white/70'}`}
+          aria-label={ambientGlow ? 'Turn off corner & side gradient' : 'Turn on corner & side gradient'}
+          title={ambientGlow ? 'Corner & Side Gradient: Enabled (Click to turn off)' : 'Corner & Side Gradient: Disabled (Click to turn on)'}
+          onClick={() => setAmbientGlow(!ambientGlow)}
+        >
+          <Scan size={18} strokeWidth={2.2} />
         </button>
         <button
           className={`${chromeButton} relative transition-colors ${stereoEnabled ? 'text-sky-400 hover:text-sky-300' : ''}`}
