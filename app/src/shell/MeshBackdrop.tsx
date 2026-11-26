@@ -198,34 +198,42 @@ export function MeshBackdrop({
       const analyser = getAudioAnalyser();
       let bassEnergy = 0;
       let midEnergy = 0;
+      let trebleEnergy = 0;
 
       if (analyser && animate) {
         analyser.getByteFrequencyData(freqData);
 
-        // Sub-bass & kick drum: bins 0 to 6 (~20 Hz - 150 Hz)
+        // 1. Sub-bass & kick drum: bins 0 to 6 (~20 Hz - 140 Hz)
         let bassSum = 0;
         for (let i = 0; i < 7; i++) {
           bassSum += freqData[i]!;
         }
         bassEnergy = bassSum / (7 * 255);
 
-        // Mid frequencies: bins 10 to 35 (~250 Hz - 850 Hz)
+        // 2. Mid frequencies: bins 10 to 35 (~250 Hz - 1 kHz)
         let midSum = 0;
         for (let i = 10; i < 35; i++) {
           midSum += freqData[i]!;
         }
         midEnergy = midSum / (25 * 255);
 
-        // Dynamic transient beat detection (kick drum strike)
+        // 3. Treble & presence: bins 36 to 58 (~1.5 kHz - 8 kHz)
+        let trebleSum = 0;
+        for (let i = 36; i < 58; i++) {
+          trebleSum += freqData[i]!;
+        }
+        trebleEnergy = trebleSum / (22 * 255);
+
+        // Dynamic transient beat detection (sub-bass kick drum strike)
         runningBassAvg = runningBassAvg * 0.94 + bassEnergy * 0.06;
-        if (bassEnergy > runningBassAvg * 1.25 && bassEnergy > 0.2) {
-          const delta = (bassEnergy - runningBassAvg) * 3.5;
+        if (bassEnergy > runningBassAvg * 1.22 && bassEnergy > 0.18) {
+          const delta = (bassEnergy - runningBassAvg) * 3.8;
           beatHit = Math.max(beatHit, Math.min(1.0, delta));
         }
       }
 
       // Smooth decay of beat hit impulse
-      beatHit *= 0.88;
+      beatHit *= 0.90;
 
       if (animate) {
         // Musical momentum: fluid surges with kicks and loud dynamic sections
@@ -248,6 +256,7 @@ export function MeshBackdrop({
           gr4dient.render(currentColors, phase, activeMode, {
             bass: bassEnergy,
             mid: midEnergy,
+            treble: trebleEnergy,
             beatHit,
           });
         } else if (fallbackCanvas) {

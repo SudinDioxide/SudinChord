@@ -310,6 +310,7 @@ const DEFAULT_POINTS: [number, number][] = [
 export interface AudioPulse {
   bass: number; // 0.0 to 1.0 (continuous sub-bass & kick energy)
   mid: number; // 0.0 to 1.0 (vocals & snare energy)
+  treble?: number; // 0.0 to 1.0 (shimmer & high frequencies)
   beatHit: number; // 0.0 to 1.0 (transient kick drum impulse)
 }
 
@@ -423,7 +424,47 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
       }
 
       const bass = pulse ? pulse.bass : 0;
+      const mid = pulse ? pulse.mid : 0;
+      const treble = pulse?.treble ?? (bass * 0.3 + mid * 0.4);
       const beat = pulse ? pulse.beatHit : 0;
+
+      // Harmonic Lissajous Orbs physics
+      // Phase t advances seamlessly in sync with musical downbeats
+      const t = phase * Math.PI * 2;
+
+      // Orb 0 (Top Left [-0.45, 0.35] - Bass harmonic 2:3 ratio)
+      const r0x = 0.15 + bass * 0.10 + beat * 0.08;
+      const r0y = 0.12 + bass * 0.09 + beat * 0.06;
+      flatPts[0] = DEFAULT_POINTS[0]![0] + Math.sin(t * 2.0 + Math.PI * 0.25) * r0x;
+      flatPts[1] = DEFAULT_POINTS[0]![1] + Math.cos(t * 3.0) * r0y;
+
+      // Orb 1 (Top Right [0.45, 0.25] - Mid/Vocal counter-phase 3:4 ratio)
+      const r1x = 0.14 + mid * 0.11;
+      const r1y = 0.13 + mid * 0.10;
+      flatPts[2] = DEFAULT_POINTS[1]![0] + Math.sin(t * 3.0 + Math.PI * 0.5) * r1x;
+      flatPts[3] = DEFAULT_POINTS[1]![1] + Math.cos(t * 4.0) * r1y;
+
+      // Orb 2 (Center [0.0, -0.05] - Sub-bass kick dilated Lissajous 1:2 figure-8 knot)
+      const r2x = 0.18 + bass * 0.14 + beat * 0.18;
+      const r2y = 0.14 + bass * 0.11 + beat * 0.15;
+      flatPts[4] = DEFAULT_POINTS[2]![0] + Math.sin(t * 1.0) * r2x;
+      flatPts[5] = DEFAULT_POINTS[2]![1] + Math.cos(t * 2.0) * r2y;
+
+      // Orb 3 (Bottom Left [-0.35, -0.38] - Treble shimmer harmonic 3:5 ratio)
+      const r3x = 0.13 + treble * 0.10;
+      const r3y = 0.14 + treble * 0.09;
+      flatPts[6] = DEFAULT_POINTS[3]![0] + Math.sin(t * 3.0 + Math.PI * 0.75) * r3x;
+      flatPts[7] = DEFAULT_POINTS[3]![1] + Math.cos(t * 5.0) * r3y;
+
+      // Orb 4 (Bottom Right [0.45, -0.35] - Transient beat surge 4:5 ratio)
+      const r4x = 0.15 + beat * 0.15 + bass * 0.07;
+      const r4y = 0.13 + beat * 0.13 + bass * 0.06;
+      flatPts[8] = DEFAULT_POINTS[4]![0] + Math.sin(t * 4.0 + Math.PI) * r4x;
+      flatPts[9] = DEFAULT_POINTS[4]![1] + Math.cos(t * 5.0) * r4y;
+
+      // Harmonic Focus for Beam/Rays mode
+      const focusX = 0.0 + Math.sin(t * 1.5) * (0.14 + beat * 0.08);
+      const focusY = 0.38 + Math.cos(t * 2.0 + 0.5) * (0.10 + bass * 0.06);
 
       // Dynamic physical reaction to music beat & bass drops
       const baseScale = mode === 1 ? 0.7 : mode === 2 ? 0.9 : 1.1;
@@ -442,7 +483,7 @@ export function createGr4dientRenderer(canvas: HTMLCanvasElement): Gr4dientRende
       gl.uniform1i(U.uCount!, count);
       gl.uniform3fv(U.uCol!, flatCols);
       gl.uniform2fv(U.uPts!, flatPts);
-      gl.uniform2f(U.uFocus!, 0.0, 0.4);
+      gl.uniform2f(U.uFocus!, focusX, focusY);
       gl.uniform1f(U.uSeed!, 3.14);
       gl.uniform1f(U.uScale!, dynamicScale);
       gl.uniform1f(U.uWarp!, dynamicWarp);

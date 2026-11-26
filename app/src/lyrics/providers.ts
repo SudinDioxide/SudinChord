@@ -984,23 +984,30 @@ export async function lyrica(q: LyricsQuery): Promise<Parsed | null> {
   const endpoint = await getLyricaEndpoint();
   const { lyricaAi } = useLyricsSettings.getState();
 
-  const params: Record<string, string> = {
-    artist: q.artist,
-    song: q.title,
-    timestamps: 'true',
+  const cleanTitle = q.title.replace(GENIUS_NOISE, '').trim() || q.title;
+  const cleanArtist = q.artist.replace(/\s*feat(?:\.|uring)?\s+.*$/i, '').trim() || q.artist;
+
+  const fetchPayload = async (artist: string, song: string) => {
+    const params: Record<string, string> = {
+      artist,
+      song,
+      timestamps: 'true',
+    };
+    if (lyricaAi) {
+      params.romanize = 'true';
+      params.translate = 'true';
+      params.language = 'en';
+    }
+    const url = urlWith(endpoint, params);
+    const body = await lyricsGet(url, { patient: true });
+    return json<LyricaPayload>(body);
   };
 
-  // Only request server-side Groq romanization/translation when explicitly enabled,
-  // preventing slow 503 errors and delays when the host has no Groq key.
-  if (lyricaAi) {
-    params.romanize = 'true';
-    params.translate = 'true';
-    params.language = 'en';
+  let parsedJson = await fetchPayload(cleanArtist, cleanTitle);
+  if (!parsedJson?.data && (cleanTitle !== q.title || cleanArtist !== q.artist)) {
+    parsedJson = await fetchPayload(q.artist, q.title);
   }
 
-  const url = urlWith(endpoint, params);
-  const body = await lyricsGet(url, { patient: false });
-  const parsedJson = json<LyricaPayload>(body);
   const data = parsedJson?.data;
   if (!data) return null;
 
@@ -1011,13 +1018,17 @@ export async function lyrica(q: LyricsQuery): Promise<Parsed | null> {
   if (Array.isArray(data.timed_lyrics) && data.timed_lyrics.length > 0) {
     const lines: LyricLine[] = data.timed_lyrics
       .filter((t) => t.text && t.text.trim())
-      .map((t, idx) =>
-        line(t.start_time, t.text.trim(), {
-          sungUntilMs: typeof t.end_time === 'number' && t.end_time > t.start_time ? t.end_time : null,
+      .map((t, idx) => {
+        const startMs = t.start_time < 1000 && t.start_time > 0 ? Math.round(t.start_time * 1000) : Math.round(t.start_time);
+        let endMs = typeof t.end_time === 'number' ? (t.end_time < 1000 && t.end_time > 0 ? Math.round(t.end_time * 1000) : Math.round(t.end_time)) : null;
+        if (endMs !== null && endMs <= startMs) endMs = null;
+
+        return line(startMs, t.text.trim(), {
+          sungUntilMs: endMs,
           romanized: romanLines[idx] || undefined,
           translation: transLines[idx] || undefined,
-        }),
-      );
+        });
+      });
 
     if (lines.length) {
       const withGaps = withInstrumentalGaps(lines);

@@ -29,8 +29,8 @@ export const LYRIC_EXTENSION_ORIGINS = [
   'https://www.tamil2lyrics.com',
 ];
 
-const DIRECT_TIMEOUT_MS = 6000;
-const EXTENSION_TIMEOUT_MS = 15_000;
+const DIRECT_TIMEOUT_MS = 7000;
+const EXTENSION_TIMEOUT_MS = 25_000;
 
 /** Lyric hosts the extension was refused for: the panel offers to allow them. */
 export const ungrantedOrigins = new Set<string>();
@@ -107,8 +107,10 @@ export async function lyricsGet(url: string, { route = 'direct', headers, patien
     });
     return response.ok ? await response.text() : null;
   } catch (error) {
-    // A CORS refusal looks like a network error from here; the extension isn't bound by it.
-    if (error instanceof TypeError) return viaExtension(url, headers);
+    // Both CORS refusals (TypeError) and timeouts/network blocks can fall back to the extension bridge
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError')) {
+      return viaExtension(url, headers);
+    }
     return null;
   }
 }
