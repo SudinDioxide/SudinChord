@@ -17,7 +17,15 @@ import { StereoDriftEngine } from '@/lib/stereoDriftEngine';
  * - Smooth color-morphing transition between album artwork palettes.
  * - Ultra-lightweight canvas render (< 0.2ms/frame) with hardware-accelerated CSS blur.
  */
-export function AmbientAppBackdrop() {
+export function AmbientAppBackdrop({
+  className,
+  style,
+  showVignette = true,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  showVignette?: boolean;
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<StereoDriftEngine | null>(null);
 
@@ -66,8 +74,11 @@ export function AmbientAppBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden transition-opacity duration-1000 ease-in-out"
-      style={{ opacity: artworkUrl ? (isPlaying ? 0.42 : 0.24) : 0 }}
+      className={
+        className ??
+        'pointer-events-none fixed inset-0 z-0 overflow-hidden transition-opacity duration-1000 ease-in-out'
+      }
+      style={{ opacity: artworkUrl ? (isPlaying ? 0.42 : 0.24) : 0, ...style }}
     >
       {/* StereoDrift Audio-Reactive Fluid Canvas */}
       <canvas
@@ -78,7 +89,9 @@ export function AmbientAppBackdrop() {
       />
 
       {/* Subtle bottom vignette to ensure player bar contrast remains sharp */}
-      <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[var(--pageBG)] via-[var(--pageBG)]/60 to-transparent opacity-90" />
+      {showVignette && (
+        <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[var(--pageBG)] via-[var(--pageBG)]/60 to-transparent opacity-90" />
+      )}
     </div>
   );
 }

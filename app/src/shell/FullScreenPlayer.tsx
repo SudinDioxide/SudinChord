@@ -34,8 +34,7 @@ import { useUi } from '@/state/ui';
 import { useHasVideo, useVideo } from '@/state/video';
 import { Credits, PageLink, pageLink } from './Lcd';
 import { LyricsPanel } from './LyricsPanel';
-import { MeshBackdrop, useGr4dientMode } from './MeshBackdrop';
-import { GR4DIENT_MODES, type Gr4dientMode } from '@/lib/gr4dient';
+import { AmbientAppBackdrop } from './AmbientAppBackdrop';
 import { analyzer } from '@/playback/automix/analysis/analyzer';
 import { albumPageFor } from './nowPlayingLinks';
 import { UpNext } from './UpNext';
@@ -432,14 +431,11 @@ export function FullScreenPlayer() {
   const hidden = theater && playing && idle ? ' pointer-events-none opacity-0' : '';
   const corner = `${chrome} transition-[background-color,color,opacity] duration-300${hidden}`;
 
-  const [gradientMode, setGradientMode] = useGr4dientMode();
-  const bpm = analyzer.get(nowPlaying.videoId)?.bpm ?? null;
-
   return (
     <div
       // Over everything but menus and dialogs, which portal above it. The on-dark colours come from tokens.css (data-full-screen).
       // --art, the artwork's side: Apple's 461px at 1440px wide, and never taller than the screen leaves room for.
-      className="fixed inset-0 z-[calc(var(--z-contextual-menus)-2)] isolate animate-enter overflow-hidden text-primary [--art:min(32vw,calc(100dvh-330px),720px)] motion-reduce:[animation-name:fade-in] max-md:[--art:min(84vw,calc(100dvh-330px),420px)]"
+      className="fixed inset-0 z-[calc(var(--z-contextual-menus)-2)] isolate animate-enter overflow-hidden bg-[#0b0c10] text-primary [--art:min(32vw,calc(100dvh-330px),720px)] motion-reduce:[animation-name:fade-in] max-md:[--art:min(84vw,calc(100dvh-330px),420px)]"
       role="dialog"
       aria-modal="true"
       aria-label="Now Playing"
@@ -450,7 +446,11 @@ export function FullScreenPlayer() {
       onKeyDown={wake}
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
-      <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} bpm={bpm} mode={gradientMode} />
+      <AmbientAppBackdrop
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-1000 ease-in-out"
+        style={{ opacity: nowPlaying.artworkUrl ? (playing ? 0.52 : 0.28) : 0 }}
+        showVignette={false}
+      />
       <AmbientGlow accent={accent} />
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
@@ -473,21 +473,13 @@ export function FullScreenPlayer() {
       >
         <X size={20} />
       </button>
-      {/* Top right actions: Video quality, Visualizer, Gradient style, Equalizer, Sleep Timer, PiP, Fullscreen */}
+      {/* Top right actions: Video quality, Visualizer, Equalizer, Sleep Timer, PiP, Fullscreen */}
       <div
         className={`absolute top-12 right-5 z-20 flex items-center gap-2.5 transition-[background-color,color,opacity] duration-300${hidden}`}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         {video && <VideoQuality />}
         <VisualizerButton className={chromeButton} placement="below-end" />
-        <button
-          className={chromeButton}
-          aria-label={`Gradient Style: ${GR4DIENT_MODES[gradientMode].name}`}
-          title={`Gradient Style: ${GR4DIENT_MODES[gradientMode].name} (${GR4DIENT_MODES[gradientMode].description})`}
-          onClick={() => setGradientMode(((gradientMode + 1) % 4) as Gr4dientMode)}
-        >
-          <Sparkles size={18} strokeWidth={2.2} />
-        </button>
         <button
           className={chromeButton}
           aria-label="Equalizer & Audio FX"
