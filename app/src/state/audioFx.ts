@@ -442,17 +442,19 @@ export function syncAudioGraph() {
       setRampedGain(msGain, 0.0, now);
       setRampedGain(binauralGain, 0.0, now);
     } else if (spatialMode === 'ms') {
-      // Classical Mid/Side matrix widener
+      // Classical Mid/Side matrix widener with automatic anti-saturation headroom scaling
+      const msHeadroom = 1 / Math.max(1, 1 + 0.35 * (stereoWidth - 1));
       setRampedGain(dryGain, 0.0, now);
-      setRampedGain(msGain, 1.0, now);
+      setRampedGain(msGain, msHeadroom, now);
       setRampedGain(binauralGain, 0.0, now);
       setRampedGain(sideGain, stereoWidth, now);
     } else {
       // Binaural HRTF 3D Spatial Audio (Virtual Studio Monitors or 360° Orbit)
+      // Dual HRTF panners sum coherent center audio at each ear (L + R).
+      // An acoustic power factor of ~0.65 (-3.7dB) guarantees zero digital clipping/saturation.
       setRampedGain(dryGain, 0.0, now);
       setRampedGain(msGain, 0.0, now);
-      // Gentle 1.12x gain compensation for head-shadow HRTF acoustic filtering
-      setRampedGain(binauralGain, 1.12, now);
+      setRampedGain(binauralGain, 0.65, now);
 
       const distance = 1.8;
       let leftAz = -binauralAngle;

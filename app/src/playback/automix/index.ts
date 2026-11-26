@@ -28,6 +28,7 @@ export interface AutomixGraph {
   eqFilters: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
   spatialProcessor: SpatialProcessor;
+  limiter: DynamicsCompressorNode;
 }
 
 /**
@@ -204,12 +205,21 @@ export function createAutomixGraph(
   // Studio 3D Spatial Audio Processor (HRTF Binaural & Mid/Side)
   const spatialProcessor = createSpatialProcessor(ctx);
 
+  // Transparent Studio Brickwall Peak Limiter (anti-saturation & zero clipping guard)
+  const limiter = new DynamicsCompressorNode(ctx, {
+    threshold: -0.5,
+    knee: 0,
+    ratio: 20,
+    attack: 0.001,
+    release: 0.05,
+  });
+
   const analyser = new AnalyserNode(ctx, {
     fftSize: 256,
     smoothingTimeConstant: 0.82,
   });
 
-  // Connect Audio Chain: master -> preamp -> EQ[0..9] -> compressor -> spatialProcessor -> analyser -> destination
+  // Connect Audio Chain: master -> preamp -> EQ[0..9] -> compressor -> spatialProcessor -> limiter -> analyser -> destination
   let lastNode: AudioNode = master;
   lastNode.connect(preamp);
   lastNode = preamp;
@@ -219,7 +229,8 @@ export function createAutomixGraph(
   }
   lastNode.connect(compressor);
   compressor.connect(spatialProcessor.input);
-  spatialProcessor.output.connect(analyser);
+  spatialProcessor.output.connect(limiter);
+  limiter.connect(analyser);
   analyser.connect(ctx.destination);
 
   // Sync with user's saved audio FX settings
@@ -246,5 +257,6 @@ export function createAutomixGraph(
     eqFilters,
     compressor,
     spatialProcessor,
+    limiter,
   };
 }
