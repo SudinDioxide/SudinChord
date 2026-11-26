@@ -328,12 +328,37 @@ export function registerGraphForFx(graph: {
   syncAudioGraph();
 }
 
-/** Calculates automatic anti-clipping headroom attenuation in dB based on highest boosted band. */
+/**
+ * Calculates true cumulative filter peak boost and anti-clipping headroom in dB.
+ * 
+ * Adjacent IIR Biquad peaking and shelving filters overlap in frequency space.
+ * When multiple adjacent bands are boosted (e.g. Bass Boost, Deep Sub-Bass, Rock, Pop),
+ * the cumulative acoustic peak gain is significantly higher than just max(bands).
+ * 
+ * This models the overlapping filter curve to prevent digital saturation and distortion.
+ */
 export function calculateAutoHeadroomDb(bands: number[], preamp: number, autoHeadroom: boolean): number {
   if (!autoHeadroom) return 0;
-  const maxBoost = Math.max(0, ...bands);
-  const totalBoost = maxBoost + Math.max(0, preamp);
-  return totalBoost > 0 ? -totalBoost : 0;
+
+  let maxCumulativeBoost = 0;
+  for (let i = 0; i < bands.length; i++) {
+    const cur = bands[i] ?? 0;
+    if (cur <= 0) continue;
+    const prev1 = Math.max(0, bands[i - 1] ?? 0);
+    const next1 = Math.max(0, bands[i + 1] ?? 0);
+    const prev2 = Math.max(0, bands[i - 2] ?? 0);
+    const next2 = Math.max(0, bands[i + 2] ?? 0);
+
+    // Overlapping 1-octave biquads add ~45% from immediate neighbors and ~15% from 2nd neighbors
+    const cumulative = cur + 0.45 * (prev1 + next1) + 0.15 * (prev2 + next2);
+    if (cumulative > maxCumulativeBoost) {
+      maxCumulativeBoost = cumulative;
+    }
+  }
+
+  const totalBoost = maxCumulativeBoost + Math.max(0, preamp);
+  // Attenuate by total cumulative boost plus 1.0 dB safety margin against inter-sample peaks
+  return totalBoost > 0 ? -(totalBoost + 1.0) : 0;
 }
 
 function setRampedGain(node: GainNode, target: number, now: number) {

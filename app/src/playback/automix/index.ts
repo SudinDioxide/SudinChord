@@ -193,25 +193,25 @@ export function createAutomixGraph(
     return filter;
   });
 
-  // Loudness Normalization Dynamics Compressor
+  // Loudness Normalization Dynamics Compressor (smooth broadcast leveling)
   const compressor = new DynamicsCompressorNode(ctx, {
     threshold: -24,
-    knee: 30,
-    ratio: 8,
-    attack: 0.003,
-    release: 0.25,
+    knee: 36,
+    ratio: 4,
+    attack: 0.02,
+    release: 0.35,
   });
 
   // Studio 3D Spatial Audio Processor (HRTF Binaural & Mid/Side)
   const spatialProcessor = createSpatialProcessor(ctx);
 
-  // Transparent Studio Brickwall Peak Limiter (anti-saturation & zero clipping guard)
+  // Transparent Studio Output Brickwall Peak Limiter (anti-saturation & zero clipping guard)
   const limiter = new DynamicsCompressorNode(ctx, {
-    threshold: -0.5,
-    knee: 0,
-    ratio: 20,
-    attack: 0.001,
-    release: 0.05,
+    threshold: -0.8,
+    knee: 8,
+    ratio: 16,
+    attack: 0.005,
+    release: 0.1,
   });
 
   const analyser = new AnalyserNode(ctx, {
